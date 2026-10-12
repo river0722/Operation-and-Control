@@ -1,0 +1,367 @@
+[
+  {
+    "slide": 1,
+    "text": [
+      "直线插补",
+      "2019年7月17日",
+      "©数控小组",
+      "汕头大学"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 2,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "例程1 直线插补",
+      ";******************** Set-up and Definitions ********************",
+      "&1 ; Coordinate system 1",
+      "DELETE GATHER",
+      "UNDEFINE  ALL",
+      "CLOSE ; Make sure all buffers are closed",
+      "     #1->1638.4X //; 1 unit (cm) of X is 1000 counts of motor 1",
+      "//   #2->1638.4Y //; 1 unit (cm) of Y is 1000 counts of motor 2",
+      ";******************** Motion Program Text ***********************",
+      "OPEN PROG 3 \t    ; Open buffer for entry, Program #2",
+      "CLEAR       \t    ; Erase existing contents of buffer",
+      "    LINEAR \t    ; Blended linear interpolation move mode",
+      "    INC \t    ; Incremental mode - moves specified by distance",
+      "    TA 500 \t    ; 1/2 sec (500 msec) acceleration time",
+      "    TS 250 \t    ; 1/4 sec in each half of S-curve",
+      "    TM 2000 \t    ; 2 sec move time (to start of decel)",
+      "    P1=1 \t    ; Initialize a loop counter variable",
+      "    WHILE (P1<2)  ; Loop until condition is false (10 times)",
+      "    X 10// Y 10\t    ; Move X-axis 10 cm (=10,000 cts) positive\t\t",
+      "    DWELL 500 \t    ; Hold position for 1/2 sec",
+      "    X -10 //Y -10\t    ; Move X-axis back 10 cm negative",
+      "    DWELL 500 \t    ; Hold position for 1/2 sec",
+      "    P1=P1+1 \t    ; Increment loop counter",
+      "    ENDWHILE \t    ; End of loop",
+      "    COMMAND \"END GATHER\"  //COMMAND \"ENDG\" ",
+      "CLOSE                  ; Close buffer - end of program",
+      "例程：来自中级培训手册",
+      "拷贝右边例程到程序中，点击下载按钮，查看面板提示下载状态，输入 &1 B3 R 运行程序",
+      "操作",
+      "本例介绍了移动的增量和时间规范，",
+      "循环逻辑，使用变量，轴的缩放和简单的算法。",
+      "例程介绍",
+      "对PMAC 用户直线插补是最通用的方式. 直线插补轨迹包括加减速时间和运动时间."
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image1.png"
+    ]
+  },
+  {
+    "slide": 3,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "数据采集",
+      "PMAC 可用在线指令采集数据：",
+      "DEFINE GATHER  (DEF GAT)  PMAC准备采集数据",
+      "GATHER  (GAT)                      PMAC开始采集过程",
+      "END GATHER (ENDG)            PMAC的采集结束",
+      "在运动程序或 PLC程序, 采集指令可如下使用:",
+      "COMMAND “DEFINE GATHER”或  CMD”DEF GAT",
+      "COMMAND “GATHER”              或 CMD”GAT”",
+      "COMMAND “END GATHER”     或CMD”ENDG”",
+      "拷贝右边例程到程序中，点击下载按钮，查看面板提示下载状态，Terminal输入",
+      "DEF GAT   定义采集缓冲区",
+      "GAT &1 B3 R  运行程序，开始收集",
+      "程序收集完成后，打开Plot作图如下页",
+      "操作"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image2.png"
+    ]
+  },
+  {
+    "slide": 4,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "收集图像验证",
+      "TA 500 \t    ; 1/2 sec (500 msec) acceleration time",
+      "TS 250 \t    ; 1/4 sec in each half of S-curve",
+      "TM 2000 \t    ; 2 sec move time (to start of decel)",
+      "DWELL 500 \t    ; Hold position for 1/2 sec",
+      "2*TS",
+      "TM",
+      "2*Ts",
+      "DWELL",
+      "3S"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image3.png",
+      "ppt/media/image4.png"
+    ]
+  },
+  {
+    "slide": 5,
+    "text": [
+      "圆弧插补",
+      "2019年7月20日",
+      "©数控小组",
+      "汕头大学",
+      "PDF",
+      "标题",
+      "内容",
+      "起始页",
+      "TURBO PMAC USER MANUAL（中文版）",
+      "16-8 圆弧混合运动",
+      "圆弧插补",
+      "320"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 6,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "语法",
+      "分段模式下 Isx13 的一般设定值为 5 到 20 毫秒。Isx13 的值越小，与真实曲线的契合度就越高，但是，运动所需计算越多，后台任务可用的就越少。",
+      "对1号电机 I5113=10//推荐",
+      "Isx13  坐标系 x 分段时间",
+      "要指定 XY 平面上的圆弧，命令 NORMAL K-1（等价于机床代码 G17）",
+      "指定插补平面",
+      " CIRCLE1 用于顺时针圆弧（等价于 G02）或者 CIRCLE2 用于逆时针圆弧（等价于 G03）",
+      "圆弧方向",
+      "坐标系I变量 Isx11-Isx99：对于坐标系 1—9，s 等于 5，x 等于坐标系号；",
+      "对于坐标系 10—16，s等于 6，x 等于坐标系号减去 10。"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 7,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "规划路径"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image5.png"
+    ]
+  },
+  {
+    "slide": 8,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "圆弧插补例程",
+      "&1         /*坐标系为1*/",
+      "CLOSE /*确认所有缓冲区被关闭*/",
+      "DELETE GATHER",
+      "UNDEFINE ALL",
+      "END GAT //停止收集",
+      "DEL GAT//删除收集",
+      "i117=1 //#1 max acceleration",
+      "i116=10 //max program velocity",
+      "i217=1 // #2 max acceleration",
+      "i216=10 //max program velocity",
+      "i5113 = 10 //粗插补时间",
+      "#1->1638.4X",
+      "#2->1638.4Y",
+      "OPEN PROG 5 CLEAR",
+      "CMD \"DEL GAT\" //删除收集",
+      "CMD \"DEF GAT\" //定义收集缓冲区",
+      "CMD \"GAT\" //开始采集",
+      "RAPID X 0 Y 0 //快速回到原点",
+      "DWELL 0",
+      "F 6 //限制最大速度， 对于这程序是 6*1638.4 cts 每秒",
+      "NORMAL K -1 //坐标系",
+      "ABS //绝对式坐标",
+      "CIRCLE1 X 0 Y 0 I 0 J 10",
+      "//CIRCLE1 X ( 10*sqrt(3)/2 ) Y 5 I ( -10*sqrt(3)/2 ) J 5",
+      "//CIRCLE1 顺时针",
+      "// X ( 10*sqrt(3)/2 ) Y 5 是终点坐标",
+      "//I ( -10*sqrt(3)/2 ) J 5 是起点到圆心的向量",
+      "DWELL 0",
+      "LINEAR ABS TM 100 X 0 Y 0",
+      "//为保证运动的实时性，控制卡会提前“看”几步，比如下一句没有 dwell 的话，控制器会提前看到“end gat”",
+      "// 有可能这时候电机还在走运动，但是已经提前 end gat，导致没采完数据",
+      "DWELL 0 //防止过早停止采集",
+      "CMD \"END GAT\" //停止收集",
+      "CLOSE",
+      "例程：参考泰道中国——技术支持——运动程序——直线圆弧运动"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 9,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "圆弧插补数据采集",
+      "从 Tools 中打开 PMAC PLOT数据采集软件，纵坐标选择2电机位置，横坐标选择1号电机位置。"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image5.png",
+      "ppt/media/image6.png"
+    ]
+  },
+  {
+    "slide": 10,
+    "text": [
+      "附录",
+      "2019年7月20日"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 11,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "运动程序命令——来源SRM手册",
+      "{axis}{data}[{axis}{data}] –简单的运动声明，可以在线性、快速和样条模式下使用 例: X1000  Y(P1)  Z(P2*P3)",
+      "{axis}{data}:{data}[{axis}{data}:{data}...] – 位置/速度运动声明，只能在 PVT 模式下使用 例: X5000:750 Y3500:(P3) A(P5+P6):100",
+      "{axis}{data}^{data}[{axis}{data}^{data}...] – 运动直到触发，只在快速模式下使用",
+      "{axis}{data}[{axis}{data}...][{vector}{data}...] – 圆弧运动声明，只在圆形插补(CIRCLE)模式下使用，向量是指向圆心的例: X2000 Y3000 Z1000 I500 J300 K500",
+      "{axis}{data}[{axis}{data}...] R{data} -- 圆弧运动声明，只在圆形插补(CIRCLE)模式下使用，R 值是半径大小",
+      "例: X2000 Y3000 Z1000 R500",
+      "DWELL{data} – 零距离声明，固定时基。如DWELL 500 //Hold position for 1/2 sec",
+      "DELAY{data} – 零距离声明，变时基",
+      "HOME{constant}[,{constant}...] – 让指定电机返回零位",
+      "HOMEZ{constant}[,{constant}...] – 让指定电机的当前位置为零位",
+      "运动命令"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 12,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "运动程序命令——来源SRM手册",
+      "N{constant} – 行标；",
+      "O{constant} – 可变的行标；",
+      "GOTO{data} – 跳到指定的 N-标志的行，不返回；",
+      "GOSUB{data}[{letter}{axis}...] – 跳到指定的 N-标志的行（带参数）并返回；",
+      "IF ({condition}){action} – 符合条件则执行动作；",
+      "IF ({condition}) – 符合条件则执行 IF 语句以下的部分；",
+      "ELSE {action} – IF 语句中，如符合前面的“假”的条件则执行动作；",
+      "ELSE –- IF语句中，符合前面的“假”的条件时则执行动作；",
+      "ENDIF – 结束条件语句的执行；",
+      "WHILE ({condition}){action} –则反复执行；",
+      "WHILE ({condition}) –只要条件为真，则执行 WHILE 语句以下的部分；",
+      "ENDWHILE – 结束循环语句的声明；",
+      "程序逻辑控制"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 13,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "运动程序命令——来源SRM手册",
+      "LINEAR –混合线性插补运动模式",
+      "RAPID –最小时间点到点运动模式(快速模式)",
+      "CIRCLE1 –顺时针圆形插补运动模式",
+      "CIRCLE2 –逆时针圆形插补运动模式",
+      "PVT{data} –位置/速度/时间运动模式（二次速度曲线）",
+      "SPLINE1 –均匀的三次样条运动模式",
+      "SPLINE2 –非均匀的三次样条运动模式",
+      "运动模式命令",
+      "ABS [({axis}[,{axis},...])] –让所有（或者是指定的）轴处于绝对运动模式下",
+      "INC [({axis}[,{axis},...])] –让所有（或者是指定的）轴处于增量运动模式下",
+      "轴特征命令",
+      "TM{data} –指定运动时间（模态的）",
+      "F{data} –指定运动速度（模态的）",
+      "TA{data} –指定运动加速时间（模态的）",
+      "TS{data} –指定 S-曲线加速时间（模态的）",
+      "运动特征命令"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image7.png"
+    ]
+  },
+  {
+    "slide": 14,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "坐标系 I 变量——来源SRM手册",
+      "注意：TA，TS和Ixx20，Ixx21的区别。前者作用范围为坐标系中，后者为JOG/HOME中。",
+      "对于坐标系 1—9，s 等于 5，x 等于坐标系号；",
+      "对于坐标系 10—16，s等于 6，x 等于坐标系号减去 10。",
+      "TA——Isx87 坐标系 x 默认程序加速时间",
+      "TS——Isx88 坐标系 x 默认程编程 S 曲线加速时间",
+      "F/TM——Isx89 坐标系 x 默认率程序进给率/ 运动时间",
+      "运动特征命令TA、TS等都有对应的坐标系I变量",
+      "Isx86 坐标系 x 替换进给率，Isx86=",
+      "Isx90 坐标系 x 进给率时间单位，Isx90=1000，则为1s",
+      "Isx92 坐标系 x 运动混合无效，Isx92=0则混合有效"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 15,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "F和TM",
+      "F 速度的单位是进给轴的用户长度（或角度）单位除以坐标系统变量 Isx90 以毫秒定义的时间单位。如果 Isx90 是在 1000 的默认值时，F 的单位是每秒的长度单位；如果 Isx90 设置为 60,000，F 单位是每分钟的长度单位。",
+      "进给率 F",
+      "TM 时间的单位是毫秒。对于一个给定的移动距离，F和TM这两个值之间是倒数的关系。",
+      "移动时间 TM"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image8.png",
+      "ppt/media/image9.png"
+    ]
+  },
+  {
+    "slide": 16,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "问题",
+      "1. 以100msTA时间和20ms的TS时间，TM为500ms的时间外成一个运动，总的运动时间是多少?",
+      "     总运动时间为 2*100ms+500ms=700ms。",
+      "2. 如果程序表达 TS 100  TA 100  TM 100，完成3个混合运动的总时间是多少?"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image10.png"
+    ]
+  },
+  {
+    "slide": 17,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "对应官方资料",
+      "PDF",
+      "标题",
+      "内容",
+      "起始页",
+      "TURBO PMAC USER MANUAL（中文版）",
+      "第十六章 编写和执行运动程序",
+      "308",
+      "TURBO PMAC(PMAC2) SRM（中文版）",
+      "运动程序命令",
+      "运动程序命令",
+      "10"
+    ],
+    "notes": [],
+    "images": []
+  }
+]

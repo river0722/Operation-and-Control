@@ -1,0 +1,121 @@
+[
+  {
+    "file": "第0.1篇——TurboPMAC和PewinPro2建立通信.pdf",
+    "pages": 7,
+    "text_chars": 671
+  },
+  {
+    "file": "第1.1篇——用Setup工具配置1号电机动起来（完）.pptx",
+    "slides": 17,
+    "text_chars": 791,
+    "pictures": 32
+  },
+  {
+    "file": "第1.2篇——查手册配置I变量让电机动起来（未完）.pptx",
+    "slides": 19,
+    "text_chars": 4574,
+    "pictures": 10
+  },
+  {
+    "file": "第2篇——让1号电机直线运动编程教程(完).pptx",
+    "slides": 15,
+    "text_chars": 2826,
+    "pictures": 17
+  },
+  {
+    "file": "第3篇——让1号电机X轴回零PLC编程教程（完）.pptx",
+    "slides": 16,
+    "text_chars": 6064,
+    "pictures": 13
+  },
+  {
+    "file": "第4篇——直线和圆弧插补.pptx",
+    "slides": 17,
+    "text_chars": 5506,
+    "pictures": 11
+  },
+  {
+    "file": "第5篇——直线圆弧插补.pptx",
+    "slides": 11,
+    "text_chars": 2088,
+    "pictures": 8
+  },
+  {
+    "file": "第6篇——Spline和PVT运动.pptx",
+    "slides": 11,
+    "text_chars": 2560,
+    "pictures": 4
+  },
+  {
+    "file": "第7篇——上位机VS+C#编程.pptx",
+    "slides": 12,
+    "text_chars": 798,
+    "pictures": 14
+  },
+  {
+    "file": "软件1篇——Plot软件的使用.pptx",
+    "slides": 12,
+    "text_chars": 1799,
+    "pictures": 13
+  },
+  {
+    "file": "程序/1.c",
+    "encoding": "utf-8-sig",
+    "lines": 44
+  },
+  {
+    "file": "程序/1号电机I变量配置.txt",
+    "encoding": "gb18030",
+    "lines": 58
+  },
+  {
+    "file": "程序/2号电机I变量配置.txt",
+    "encoding": "gb18030",
+    "lines": 62
+  },
+  {
+    "file": "程序/x轴回零PLC程序.txt",
+    "encoding": "gb18030",
+    "lines": 47
+  },
+  {
+    "file": "程序/x轴回零PLC程序启动程序.txt",
+    "encoding": "gb18030",
+    "lines": 16
+  },
+  {
+    "file": "程序/两轴回零PLC启动程序.txt",
+    "encoding": "utf-8-sig",
+    "lines": 28
+  },
+  {
+    "file": "程序/两轴回零PLC程序.txt",
+    "encoding": "utf-8-sig",
+    "lines": 93
+  },
+  {
+    "file": "程序/插补_PVT.txt",
+    "encoding": "gb18030",
+    "lines": 24
+  },
+  {
+    "file": "程序/插补_SPLINE.txt",
+    "encoding": "gb18030",
+    "lines": 31
+  },
+  {
+    "file": "程序/插补_圆弧.txt",
+    "encoding": "gb18030",
+    "lines": 34
+  },
+  {
+    "file": "程序/插补_直线圆弧.txt",
+    "encoding": "gb18030",
+    "lines": 44
+  },
+  {
+    "file": "程序/直线运动简单运动程序.txt",
+    "encoding": "gb18030",
+    "lines": 19
+  }
+]

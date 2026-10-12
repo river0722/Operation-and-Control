@@ -1,0 +1,44 @@
+&1         /*坐标系为1*/
+CLOSE /*确认所有缓冲区被关闭*/
+DELETE GATHER
+UNDEFINE ALL
+END GAT //停止收集
+DEL GAT//删除收集
+i117=1 //#1 max acceleration
+i116=10 //max program velocity
+i217=1 // #2 max acceleration
+i216=10 //max program velocity
+i5113 = 10 //粗插补时间
+#1->1638.4X
+#2->1638.4Y
+OPEN PROG 4 CLEAR
+CMD "DEL GAT" //删除收集
+CMD "DEF GAT" //定义收集缓冲区
+CMD "GAT" //开始采集
+RAPID X 0 Y 0 //快速回到原点
+DWELL 0
+LINEAR //直线运动
+ABS //绝对位置
+TM 200 //move time
+X ( 10*sqrt(3)/2 ) Y -5
+DWELL 0 //如果注释掉这条语句，那直线运动和接下来的圆弧运动便会混合
+//最后形成“圆角”
+F 6 //限制最大速度， 对于这程序是 6*1000 cts 每秒
+NORMAL K -1 //坐标系
+CIRCLE1 X ( 10*sqrt(3)/2 ) Y 5 I ( -10*sqrt(3)/2 ) J 5
+//CIRCLE1 顺时针
+// X ( 10*sqrt(3)/2 ) Y 5 是终点坐标
+//I ( -10*sqrt(3)/2 ) J 5 是起点到圆心的向量
+DWELL 0
+LINEAR //直线运动
+ABS
+TM 100
+X ( 5*sqrt(3)/2 ) Y 2.5
+//这里没有加 dwell ，它的运动是“混合的”，速度从直线到圆弧平滑过渡
+NORMAL K -1 CIRCLE1 X ( 5*sqrt(3)/2 ) Y 2.5 I -1.25 J ( 1.25*sqrt(3)/2 )
+LINEAR ABS TM 100 X 0 Y 0
+//为保证运动的实时性，控制卡会提前“看”几步，比如下一句没有 dwell 的话，控制器会提前看到“end gat”
+// 有可能这时候电机还在走运动，但是已经提前 end gat，导致没采完数据
+DWELL 0 //防止过早停止采集
+CMD "END GAT" //停止收集
+CLOSE

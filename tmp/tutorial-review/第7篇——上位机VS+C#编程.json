@@ -1,0 +1,169 @@
+[
+  {
+    "slide": 1,
+    "text": [
+      "C#编程",
+      "2019年7月23日",
+      "©数控小组",
+      "汕头大学"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 2,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "新建窗体应用项目"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image1.png"
+    ]
+  },
+  {
+    "slide": 3,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "配置项目",
+      "修改.Net Framework 为 .Net Framework 3.5 否则会出现附录中错误why?"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image2.png"
+    ]
+  },
+  {
+    "slide": 4,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "添加引用",
+      "在引用右键添加引用",
+      "在com中在COM里找到PcomSever添加"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image5.png",
+      "ppt/media/image4.png",
+      "ppt/media/image3.png"
+    ]
+  },
+  {
+    "slide": 5,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "添加引用",
+      "在Form1().cs中 加 using PCOMMSERVERLib;"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image6.png"
+    ]
+  },
+  {
+    "slide": 6,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "设计界面",
+      "打开Form1().cs[设计]",
+      "打开工具箱，从公共控件中拖动Button到设计器中"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image7.png"
+    ]
+  },
+  {
+    "slide": 7,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "编程",
+      "在属性中修改Name为“selectDevice”，Text中修改按键文本为“通讯”，双击“通讯”进入按键响应函数编写"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image9.png",
+      "ppt/media/image8.png"
+    ]
+  },
+  {
+    "slide": 8,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "C# 程序结构",
+      "一个 C# 程序主要包括以下部分：",
+      " 命名空间声明（Namespace declaration）",
+      " 一个 class",
+      " Class 方法",
+      " Class 属性",
+      " 一个 Main 方法",
+      " 语句（Statements）& 表达式（Expressions）",
+      " 注释"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 9,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "附录",
+      "打开属性修改.Net Framework 为 .Net Framework 3.5 否则会出现该错误"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image10.png"
+    ]
+  },
+  {
+    "slide": 10,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "程序逻辑",
+      "先运行Main，再run Form1"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image11.png"
+    ]
+  },
+  {
+    "slide": 11,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "附录",
+      "public virtual void GetResponse(int dwDevice, string question, out string pAnswer)",
+      "    PMACSERVERLib.PmacDeviceClass 的成员",
+      "参数说明： dwDevice    设备号    0-7",
+      "\t\t question      命令字符串，如“#1J+”、“”P801“",
+      "              pAnswer        “P801的值”  "
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image12.png"
+    ]
+  },
+  {
+    "slide": 12,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "附录"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image14.png",
+      "ppt/media/image13.png"
+    ]
+  }
+]

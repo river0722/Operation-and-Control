@@ -1,0 +1,24 @@
+CLOSE /*确认所有缓冲区被关闭*/
+DELETE GATHER
+UNDEFINE ALL
+END GAT //停止收集
+DEL GAT//删除收集
+&1         /*坐标系为1*/
+#1->100X   //X轴放大100
+OPEN PROG 6 CLEAR
+CMD "DEL GAT" //删除收集
+CMD "DEF GAT" //定义收集缓冲区
+CMD "GAT" //开始采集
+INC  //增量式
+PVT 200  //PVT mode with move time T=200msec
+X 133.333:1000 //Move 1：P=133.333，V=1000
+PVT 100
+X 100:1000
+X 96.667:900
+PVT 200
+X 140:500
+PVT 500
+X 83.333:0
+DWELL 0 //防止过早停止采集
+CMD "END GAT" //停止收集
+CLOSE

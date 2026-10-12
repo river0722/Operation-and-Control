@@ -1,0 +1,63 @@
+=== 第 1 页 ===
+© OMRON Corporation
+CONFIDENTIAL
+Turbo PMAC 的通讯
+2018.03.13
+自动化中心
+1
+制作 照查 认可
+2018/3/13
+Motion课
+桑蓦
+ATCC-*17****-1
+
+=== 第 2 页 ===
+CONFIDENTIAL
+ © OMRON Corporation
+设置本机IP地址
+ATCC-*17****-1
+2
+本机IP地址需要与控制卡IP地址位于同一网段，IP地址不能与控制卡相同。
+控制卡出厂默认IP地址：192.6.94.5
+
+=== 第 3 页 ===
+CONFIDENTIAL
+ © OMRON Corporation
+PewinPro2设置
+ATCC-*17****-1
+3
+安装好PewinPro2后按上述操作添加控制卡
+
+=== 第 4 页 ===
+CONFIDENTIAL
+ © OMRON Corporation
+建立通讯
+ATCC-*17****-1
+4
+控制卡添加成功后按上述操作与控制卡建立连接
+
+=== 第 5 页 ===
+CONFIDENTIAL
+ © OMRON Corporation
+检查通讯
+ATCC-*17****-1
+5
+当建立连接后，我们可以按上述操作，通过WatchWindow读取X:$0地址
+中的数，确定连接及控制卡工作状态是否正常
+
+=== 第 6 页 ===
+CONFIDENTIAL
+ © OMRON Corporation
+检查连接
+ATCC-*17****-1
+6
+如果一切正常会看见数字在不断变化
+
+=== 第 7 页 ===
+CONFIDENTIAL
+ © OMRON Corporation
+变更履历
+Rev. 日期 担当 内容 页
+A 2018/3/13 桑蓦 新建制作
+ATCC-*17****-1
+7

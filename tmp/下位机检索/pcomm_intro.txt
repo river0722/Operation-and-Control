@@ -1,0 +1,470 @@
+
+===== PDF PAGE 1 =====
+ 
+PcommServer Library of PMAC Functions  
+ 
+License Statement and Limited Warranty 
+(If you have any questions, contact our Customer Service Department at (818 998-2095) 
+ 
+IMPORTANT:  Carefully read all the terms and condition of this agreement before installing this software.  Installing this soft ware indicated your acceptance of the terms and 
+conditions contained in this agreement.  If you do not agree to  the terms and conditions contained in this agreement, promptly return this package, unopened, and all associated 
+documentation to the place of purchase, and your money will be refunded.  No refunds will be given for products that have missing or damaged components. 
+ 
+By installing Delta Tau Data Systems Accesso ry ACC-9PNPRO2, PcommServer (herein referred to as "the SOFTWARE" or "SOFTWARE") th e purchasing customer or 
+corporation accepts the following License Agreement. 
+ 
+LICENSE:  The purchasing person or corporation has the right to use the SOFTWARE on an unlimited number of computers owned by t he person or corporation (“site license”).  
+The purchasing person or corporation has a royalty-free right to  distribute only the "run-time modules" with the executable fil es created in any other vendor product (Language 
+Development Tool) limited as hereinafter set forth in paragraph a through d.  Delta Tau Data Systems, Inc. grants you a royalty -free distribution if:  (a) you distribute the "run 
+time" modules only in conjunction with the ex ecutable files that make use of them as part of your software product; (b) you do not use the Delta Tau Data Systems, Inc. name, 
+logo, or trademark to market your software product; (c) The SOFT WARE end users do not use the "run time" modules or any other S OFTWARE components for development 
+purposes. And, (d) you agree to indemnify, hold harmless, and defe nd Delta Tau Data Systems, Inc. and its suppliers from and ag ainst any and all claims or lawsuits including 
+attorney’s fees, that arise or result from the use or distribution of your software product.  If any of the conditions set forth in paragraphs a through d are breached, such breach shall 
+constitute an unlawful use of the SOFTWARE, and you shall be prosecuted to the full extent  of the law.  Furthermore, you shall be liable to Delta Tau Data Systems, Inc. for all 
+damages caused by such a breach and unlawful use of the software, including attorney’s fees and costs incurred in any action, l awsuit or claim brought or filed to redress the 
+breach of this agreement.  The “run time modules” are those files included in the SOFTWARE package that are required during execution of your software program. 
+ 
+TERM:  This license agreement is in effect  until terminated.  You may at any time te rminate this agreement by destroying the so ftware, diskettes, documentation, and all copies 
+thereof.  Delta Tau reserves the right to terminate this agreement if you fail to comp ly with any of the terms and conditions c ontained herein.  Should Delta Tau terminate this 
+agreement because of your failure to comply, you agree to destroy or return to De lta Tau the program and documentation and any copies, in any and all forms, received from Delta 
+Tau or generated in connection with this agreement. 
+ 
+LIMITED WARRANTY: Delta Tau warrants that the diskettes and docum entation enclosed within this product will be free from defect s in materials and workmanship for a 
+period of ninety days from the date of purchase as evidenced by  a copy of your receipt.  THE PROGRAM IS PROVIDED “AS-IS” WITHOU T WARRANTY OF ANY KIND, 
+EITHER EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF THE MERCHANTABILITY AND FITNESS FOR A 
+PARTICULAR PURPOSE.  This limited warranty  gives you specific legal rights; you may have  others that vary from state to state.  Some states do not allow the exclusion of 
+incidental or consequential damages so some of the above may not apply to you. 
+ 
+The entire and exclusive liability and remedy for breach of the Limited Warranty shall be limited to replacement of defective diskette(s) or documentation and shall not include or 
+extend to any claim for or right to recover any other damages, including but not limited to, loss of profit, data, or use of th e software, or special, incidental, or consequential 
+damages or other similar claims, even if Delta Tau has been speci fically advised of the possibility of such dames.  In no event  will Delta Tau’s liability fo r damages to you or any 
+other person ever exceed the actual original price paid, as evidenced by the receipt, for the license to use the software, regardless of any form of the cl aim.  In the event that the 
+original receipt is lost, the suggested list price at the time of purchase will be substituted as the maximum amount for liability for damages.   
+ 
+GOVERNMENT:  This license statement shall be construed, interpreted and governed the laws  of the State of California.  If any p rovision of this statement is found void or 
+unenforceable, it will not affect the validity of the balance of th is statement, which shall remain valid and enforceable according to its terms.  If any remedy provided is determined 
+to have failed of its essential purpose, a ll limitations of liability and exclusions of  damages set forth in the Limited Warran ty shall remain in full force and effect.  This statement 
+may only be modified in writing signed by you and an authorized o fficer of Delta Tau.  Use, duplication, or disclosure by the U S Government of the computer software and 
+documentation in this package shall be subject to the restricted rights applicable to commercial computer software.  All rights  not specifically granted in this statement are reserved 
+by Delta Tau. 
+ 
+Copyright  2001, 2005 Delta Tau Data Systems, Inc. 21314 Lassen St. Chatsworth, CA 91311 818-998-2095. All rights reserved. 
+Delta Tau, PMAC, and the symbol are registered trademarks of Delta Tau Data Systems, Inc. 
+Microsoft, Windows 2000 and XP are registered trademarks of the Microsoft Corporation.  Borland is a trademark of Borland Inter national, Inc.   Windows is a trademark of 
+Microsoft Corporation 
+Delta Tau Data Systems Inc. 
+21314 Lassen St. 
+Chatsworth, CA 91311 
+(818) 998 2095 
+Fax: (818) 998 7807 
+ 
+
+===== PDF PAGE 2 =====
+PcommServer 
+Table of Contents 
+INTRODUCTION ................................................................................................................... ....................................7 
+ABOUT PCOMMSERVER PRO2 LIBRARY..................................................................................................................... 7 
+A GLOBAL VIEW OF THE DRIVER............................................................................................................................... 7 
+SUPPORTED OPERATING SYSTEMS ............................................................................................................................. 9 
+COMMUNICATION MODES............................................................................................................................... ...........9 
+Plug & play ports.............................................................................................................. ....................................9 
+Non-plug & play ports .......................................................................................................... ................................9 
+HARDWARE REQUIREMENTS............................................................................................................................... .......9 
+GETTING STARTED................................................................................................................ ...............................10 
+SETTING UP COMMUNICATIONS WITH PMAC .......................................................................................................... 10 
+USAGE OF PCOMMSERVER ............................................................................................................................... ........10 
+Microsoft VB.NET sample code................................................................................................... .......................10 
+Microsoft C# .NET Example code................................................................................................. ......................12 
+Using PcommServer in MFC using  .NET ..........................................................................................................18 
+Interfacing PCOMMSERVER in Visual Studio 6 (C++) Applications...............................................................20 
+Visual Basic 6.0 Example ....................................................................................................... ............................25 
+Borland C++ .................................................................................................................... ..................................25 
+Shutting Down Communication .................................................................................................... ......................29 
+PCOMMSERVER FEATURES........................................................................................................... ....................31 
+A Guide to Using ASCII Communication Functions...........................................................................................31 
+Common Problems Experienced Using ASCII Communications Functions.......................................................31 
+Thread-Safe ASCII Communications ..................................................................................................................31 
+Error Handling - ASCII Communication And Other Functions .........................................................................31 
+USING INTERRUPTS ............................................................................................................................... ...................32 
+DOWNLOADING TO PMAC ........................................................................................................................... ...........33 
+INTRODUCTION ................................................................................................................... ..................................36 
+IMPORTANT INFORMATION ABOUT METHOD OF COMMUNICATION BEING USED BY PCOMMSERVER......................36 
+NO PARAMETER SPECIFYING MAXCHAR NEEDED IN PCOMMSERVER ....................................................................... 36 
+ROLE CHANGE BETWEEN THE RETURN VALUE AND STATUS WORD........................................................................... 36 
+INITIALIZATION, SHUTDOWN AND CONFIGURATION FUNCTIONS.....................................................37 
+SELECTDEVICE() METHOD ............................................................................................................................... .......37 
+OPEN() METHOD............................................................................................................................... .......................38 
+CLOSE() METHOD ............................................................................................................................... .....................38 
+ASCII COMMUNICATION FUNCTIONS.................................................................................................. ..........40 
+GETRESPONSEEX() METHOD............................................................................................................................... ....40 
+GETCONTROLRESPONSEEX()  METHOD .................................................................................................................. 40 
+RAWGETRESPONSEEX METHOD.............................................................................................................................. 41 
+RAWGETCONTROLRESPONSEEX() METHOD ........................................................................................................... 42 
+GETRESPONSEPROGRESS() METHOD ....................................................................................................................... 43 
+ABORT() METHOD ............................................................................................................................... ....................44 
+GETPMACTYPE() METHOD ............................................................................................................................... .......44 
+DEVPMACTYPE ENUMERATION .......................................................................................................................... 44 
+GETPMACLOCATION() METHOD.............................................................................................................................. 45 
+DEVLOCATIONTYPE ENUMERATION ................................................................................................................. 46 
+SETCHECKSUMS() METHOD............................................................................................................................... ......47 
+DPRAVAILABLE(), DPRSIZE() PROPERTIES ............................................................................................................ 47 
+GETASCIICOMM(), SETASCIICOMM() METHODS..................................................................................................... 48 
+DEVASCIIMODE ENUMERATION.......................................................................................................................... 48 
+Table of Contents i 
+
+===== PDF PAGE 3 =====
+PcommServer 
+PUT_USMONITORINGENABLED()  AND PUT_USMONITORINGPERIOD() METHODS .................................................49 
+PHASEMOTOR() METHOD ............................................................................................................................... .........49 
+PMACRESET() METHOD ............................................................................................................................... ............50 
+PMACSAVE() METHOD ............................................................................................................................... .............50 
+DPRTEST() METHOD............................................................................................................................... ................51 
+ABORTTEST() METHOD ............................................................................................................................... ............52 
+GET_DPRTESTING() METHOD ............................................................................................................................... ..52 
+DOWNLOADING TO PMAC............................................................................................................ ......................53 
+DOWNLOAD() METHOD ............................................................................................................................... ............53 
+DOWNLOADING() METHOD............................................................................................................................... .......54 
+ABORTDOWNLOAD() METHOD ............................................................................................................................... .54 
+EVENTS SUPPORT IN PCOMMSERVER .................................................................................................. .........56 
+MESSAGE EVENT ............................................................................................................................... ......................56 
+PROGRESS EVENT ............................................................................................................................... .....................56 
+ERROR EVENTS ............................................................................................................................... .........................56 
+UNSOLICITED REPONSE............................................................................................................................... .............56 
+INTERRUPTS ............................................................................................................................... ..............................56 
+DATA GATHERING FUNCTIONS....................................................................................................... .................57 
+GATHER STRUCTURES............................................................................................................................... ...............57 
+STARTGATHER, STOPGATHER METHODS ................................................................................................................ 57 
+COLLECTGATHERDATA METHOD............................................................................................................................ 58 
+GETGATHERSAMPLES METHOD............................................................................................................................... 58 
+GETNUMGATHERSOURCES METHOD....................................................................................................................... 59 
+SETGATHER METHOD ............................................................................................................................... ...............59 
+GETGATHER METHOD ............................................................................................................................... ..............59 
+SETQUICKGATHER METHOD ............................................................................................................................... ....60 
+SETQUICKGATHERWITHDIRECTCURRENT METHOD ............................................................................................... 61 
+CLEARGATHER, CLEARGATHERDATA METHODS.................................................................................................... 61 
+INITGATHER METHOD ............................................................................................................................... ..............62 
+SETCURRENTGATHER............................................................................................................................... ...............62 
+GETGATHERPOINT METHOD............................................................................................................................... .....62 
+PCOMMSERVER DPR FEATURES....................................................................................................... ...............64 
+A GLOBAL VIEW OF THE DPR SUPPORT FUNCTIONS ............................................................................................... 64 
+Fixed Real Time Data buffer.................................................................................................... ...........................64 
+Fixed Background Data Buffer................................................................................................... ........................64 
+Binary Rotary Buffer........................................................................................................... ................................64 
+Read/Write Functions ........................................................................................................... ..............................65 
+CONFIGURING DPR REAL TIME FIXED AND BACKGROUND FIXED DATA BUFFERS .................................................65 
+Startup/ShutDown and Handshaking............................................................................................... ...................65 
+USING THE DPR REAL TIME FIXED DATA BUFFERS ................................................................................................ 67 
+Data Query functions........................................................................................................... ...............................67 
+USING THE DPR BACKGROUND FIXED DATA BUFFER............................................................................................. 70 
+Data Query Functions........................................................................................................... ..............................70 
+Logical Query Functions ........................................................................................................ ............................70 
+USING THE DPR BINARY ROTARY MOTION PROGRAM BUFFER .............................................................................. 72 
+DPR REAL TIME FIXED DATA BUFFER................................................................................................ ...........75 
+DPR REAL TIME FIXED DATA BUFFER INITIALIZATION .......................................................................................... 75 
+DPR REAL TIME FIXED DATA BUFFER QUERY ROUTINES....................................................................................... 75 
+DPR BACKGROUND FIXED DATA BUFFER ............................................................................................... .....79 
+DPR BACKGROUND FIXED DATA BUFFER INITIALIZATION AND HANDSHAKING.....................................................79 
+ii   Table of Contents 
+
+===== PDF PAGE 4 =====
+PcommServer 
+DPR BACKGROUND FIXED DATA BUFFER QUERY ROUTINES.................................................................................. 79 
+DPR BINARY ROTARY BUFFER FUNCTIONS............................................................................................. ....82 
+DPRROTBUFCLR() METHOD............................................................................................................................... ....82 
+DPRSETROTBUF() METHOD ............................................................................................................................... ....82 
+DPRASCIISTRTOROTEX() METHOD ....................................................................................................................... 83 
+DPR NUMERIC READ AND WRITE..................................................................................................... ...............85 
+GENERAL INFORMATION ............................................................................................................................... ...........85 
+STANDARD READ/WRITE ............................................................................................................................... ..........85 
+DUAL WORD CONVERSION ............................................................................................................................... .......85 
+DPRGETMEM() METHOD ............................................................................................................................... .........85 
+DPRSETMEM() METHOD............................................................................................................................... ..........86 
+DPRGETSHORT() METHOD ............................................................................................................................... ......87 
+DPRSETSHORT() METHOD ............................................................................................................................... .......87 
+DPRGETLONG() METHOD............................................................................................................................... ........88 
+DPRSETLONG() METHOD............................................................................................................................... .........89 
+DPRGETFLOAT() METHOD............................................................................................................................... .......89 
+DPRSETFLOAT() METHOD ............................................................................................................................... .......90 
+DPRFLOAT() METHOD ............................................................................................................................... .............90 
+DPRGETFIXEDDOUBLE() METHOD ......................................................................................................................... 91 
+PCOMMSERVER STRING MANIPULATION FUNCTIONS ...........................................................................93 
+STRTO32F METHOD............................................................................................................................... ...................93 
+STRTOD32DP METHOD ............................................................................................................................... ..............93 
+STRTOD24 METHOD ............................................................................................................................... ..................93 
+STRTOD48F METHOD ............................................................................................................................... ................94 
+STRTOD48L METHOD ............................................................................................................................... ................94 
+DATA TYPES, STRUCTURES, CALLBACKS, AND CONSTANTS.................................................................96 
+GLOBALSTATUS FOR TURBOAND NON-TURBO .............................................................................................. 96 
+Turbo Global Status Structure .................................................................................................. ..........................96 
+Turbo Global Status Macros..................................................................................................... ..........................96 
+Non-Turbo Global Status Structure .............................................................................................. ......................97 
+Non-Turbo Global Status Macros................................................................................................. ......................98 
+COORDINATESYSTEMSTATUS FOR TURBOAND NON-TURBO..................................................................... 99 
+Turbo CS Status Structure ...................................................................................................... ............................99 
+Turbo CS Status Macros ......................................................................................................... ..........................100 
+Non-Turbo CS Status Structure .................................................................................................. ......................101 
+Non-Turbo CS Status Macros ..................................................................................................... ......................103 
+SERVOSTATUS TURBO AND NON-TURBO ....................................................................................................... 103 
+Turbo Motor Status Structure ................................................................................................... ........................103 
+Turbo Motor Status Macros...................................................................................................... ........................104 
+Non-Turbo Motor Status Structure ............................................................................................... ....................105 
+Non-Turbo Motor Status Macros.................................................................................................. ....................106 
+COMMUNICATION APPLICATION NOTES ................................................................................................ ...110 
+INDEX .......................................................................................................................... ............................................111 
+ 
+ 
+ 
+ 
+Table of Contents iii 
+
+===== PDF PAGE 5 =====
+PcommServer 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+USER MANUAL 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Using PcommServer 5 
+
+===== PDF PAGE 6 =====
+PcommServer 
+INTRODUCTION 
+The PMAC 32-bit communication driver provides all channel of communication between the host computer 
+and PMAC controllers.  All methods of communication to PMAC are included.  All types of PMACs (Turbo 
+and non-Turbo) use this driver for communication to the host computer. 
+About PcommServer Pro2 Library 
+The Delta Tau 32-bit communication driver PcommServer is a set of more than 400 functions written as a 
+development tool for the creation of PMAC applications on Windows 2000 and XP. The routines are 
+designed with robustness, speed and portability in mind. PcommServer may be used by all PMAC types. 
+Methods of communication include the bus (ISA and PCI), Dual Ported RAM, Serial, USB and Ethernet. 
+PcommServer is compatible with the 32-bit Borland and Microsoft development products, which include: 
+¾ 
+¾ 
+¾ 
+¾ 
+¾ 
+¾ 
+¾ 
+¾ 
+Microsoft Visual Basic for .NET 
+Microsoft C# for .NET 
+Microsoft Visual C++ for .NET 
+Microsoft Visual C++ 6.0 
+Microsoft Visual Basic 6.0 
+Borland C++ Builder 6.0 
+DOS (basic communication) Examples and 
+Linux driver files for ISA and PCI PMACs 
+This manual assumes that you know Windows basics and general programming practices. 
+A Global View of the Driver 
+The driver can be used for Windows 2000/XP application development.  The driver consists of following sets 
+of files: 
+PcommServer.exe – A ComInterface server application, responsible for core communication and 
+transferring the data between the host computer and PMAC controllers. 
+¾ 
+¾ 
+¾ 
+¾ 
+¾ 
+PmacISA.SYS, PmacPCI.SYS, PmacUSB.SYS – Windows 2000/XP kernel drivers. 
+PmacISA.INF, PmacPCI.INF or PmacUSB.INF – Windows Setup Information files. 
+ETHConfigure.EXE, USBConfigure.EXE and USBETHConfigure.EXE – Ethernet and USB 
+configuration applications are responsible for boot firmware download and the IP configuration 
+application is responsible for USB and Ethernet modes of communication.  Furthermore, PmacETH.SYS 
+loads the Ethernet mode at startup. 
+A complete Source Code along with a simple User Interface for Linux operating system is packed in the 
+file pmac.0.0.1.tar.gz. 
+The illustration below shows how these modules are related.  
+ 
+ 
+Using PcommServer 7 
+
+===== PDF PAGE 7 =====
+PcommServer 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+8   PmacETH.sys 
+ETH Configure
+ Using PcommServer 
+ Interface Programs 
+ 
+PMAC 32-Bit 
+Communication Driver 
+ 
+ 
+ COM Interface 
+IPmacNC 
+COM Interface 
+IPmacDevice 
+Exported DLL 
+Communication 
+Functions. 
+ 
+ 
+  
+ 
+PcommServer.exe 
+Contains communications and NC code. 
+Uses threads to buffer serial busses, 
+rotary buffer, memory updating and 
+Ethernet sockets. 
+Contains all global memory. 
+PComm32W.dll 
+A wrapper for the IPmacDevice 
+Interface for legacy programs. 
+Serial Com Ethernet 
+COM(#) 
+System Function(s). 
+PcommServer uses this for 
+SERIAL communications 
+WinSock2 
+System Function(s). 
+PcommServer uses this for 
+ETHERNET 
+communicationsIOCTL 
+Hardware Drivers 
+PmacUSB.sys 
+USB Hardware
+PmacPCI.sys 
+PCI Hardware
+PmacISA.sys 
+ISA Hardware
+
+===== PDF PAGE 8 =====
+PcommServer 
+Supported Operating Systems 
+The following operating systems are supported: 
+Windows 2000 ¾ 
+¾ Windows XP  
+Communication Modes 
+Plug & play ports 
+PCI BUS PMAC ¾ 
+¾ 
+¾ 
+¾ 
+¾ 
+USB Port PMAC 
+Non-plug & play ports 
+ISA Bus PMAC 
+Serial Port PMAC 
+Ethernet port PMAC 
+Hardware Requirements 
+The PMAC 32-Bit Communication Driver for Windows requires a minimum specification of hardware for 
+reliable operation and acceptable performance.  These requirements include: 
+500 MHz Pentium III and above (of course, a faster computer will yield better throughput.) ¾ 
+¾ 
+¾ 
+¾ 
+At least 35 MB of free disk space and 128 MB of RAM. 
+A free serial communications port, USB port, Ethernet port, PCI BUS slot, or ISA BUS slot to talk to 
+PMAC for on-line processing 
+Any monitor with SVGA resolution (800x600 with at least 256 colors
+Using PcommServer 9 
+
+===== PDF PAGE 9 =====
+PcommServer 
+GETTING STARTED 
+Setting up Communications with PMAC 
+No applications, including all Delta Tau software programs, will be used to add PMACs in your system. 
+Rather, communication settings have been centralized in your operating system, making the set up of each 
+PMAC much like that of other devices in your computer (i.e. printer, video card, sound card, etc.)  All setup is 
+done either automatically for Plug and Play device or through the Control Panel's Add New Hardware 
+Wizard for non-Plug and Play devices. Detailed procedure on how to install and configure PMAC devices for 
+all applications is explained in DT Driver_Install.PDF  
+Usage of PcommServer 
+In this section we discuss the usage of PcommServer in general, as well as specifically through several 
+examples programs. In the following section, we explain the procedure on how to create new programs based 
+on PcommServer in different development environments. 
+¾ Microsoft VB.NET sample projects 
+¾ Microsoft C#.NET sample projects 
+¾ Microsoft C++.NET (Managed C++ code) sample projects 
+¾ Microsoft C++ 6.0 sample projects 
+¾ Microsoft VB 6.0 sample projects 
+¾ Borland C++ Builder 6.0 sample projects 
+Microsoft VB.NET sample code 
+This example contains two steps. First we obtain a reference to PcommServer and then use it our code 
+Obtaining a reference to PcommServer using VB.NET 
+1. This document assumes that the user can create a visual basic .NET project.  
+2. After a project is created from the Solution Explorer of .NET right mouse click on the Reference 
+Folder then Select Add Reference…  
+ 
+10    Getting Started 
+
+===== PDF PAGE 10 =====
+PcommServer 
+3. The Add Reference tabbed Dialog box will appear. Next select the COM tab and select the Browse 
+… button and select PcommServer.exe. 
+4. Now that the PcommServer reference is available it may be used from VB.NET 
+ 
+ 
+ 
+Using the Reference to PcommServer in VB.NET 
+Using the reference just created from VB.NET is very easy. First the PmacDevice Object must be 
+declared. This is done in the section A. The object pmac is declared as a PmacDevice from PcommServer. 
+Next an instance of the pmac object must be created. This is done using the New statement see section A.  
+Section B represents actual code that communicates to the PcommServer. In the following example, 
+Open, Close, GetResponse, and SelectDevice parameters can be determined from the online help string 
+that occurs when pmac. Is typed.  In the following example three labels were created on the Visual Basic 
+Form Label1, Label2 and Label3.  These three labels display the PMAC version, date and type. 
+Getting Started 11 
+
+===== PDF PAGE 11 =====
+PcommServer 
+ 
+A simple VB.NET example is available for compilation in the folder <PROGRAM 
+FILES>\DTDRIVER\DOTNETVB folder. 
+Microsoft C# .NET Example code 
+C# has become the environment of choice for many programmers for many applications. In this section we 
+describe the procedure on how to obtain and use the reference to PcommServer for a C#.NET project. 
+Obtaining a reference to PcommServer using C#.NET 
+1. This document assumes that the user can create a C#.NET project.  
+2. After a project is created from the Solution Explorer of .NET right mouse click on the Reference 
+Folder then Select Add Reference…  
+ 
+3. The Add Reference tabbed Dialog box will appear. Next select the COM tab and select the Browse 
+… button and select PcommServer 1.0 Type Library. 
+4. Now that the PcommServer reference is available it may be used from C#.NET 
+12    Getting Started 
+
+===== PDF PAGE 12 =====
+PcommServer 
+ 
+ 
+ 
+Using the Reference to PcommServer in C#.NET 
+Using the reference just created from C#.NET is very easy. First the PmacDevice Object must be 
+declared.  
+Getting Started 13 

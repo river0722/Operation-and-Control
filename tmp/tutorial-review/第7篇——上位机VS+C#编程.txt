@@ -1,0 +1,106 @@
+=== 第 1 页 ===
+C#编程
+2019年7月23日
+©数控小组
+汕头大学
+[备注] 
+[图片] 
+
+=== 第 2 页 ===
+汕头大学
+©数控小组
+新建窗体应用项目
+[备注] 
+[图片] ppt/media/image1.png
+
+=== 第 3 页 ===
+汕头大学
+©数控小组
+配置项目
+修改.Net Framework 为 .Net Framework 3.5 否则会出现附录中错误why?
+[备注] 
+[图片] ppt/media/image2.png
+
+=== 第 4 页 ===
+汕头大学
+©数控小组
+添加引用
+在引用右键添加引用
+在com中在COM里找到PcomSever添加
+[备注] 
+[图片] ppt/media/image5.png, ppt/media/image4.png, ppt/media/image3.png
+
+=== 第 5 页 ===
+汕头大学
+©数控小组
+添加引用
+在Form1().cs中 加 using PCOMMSERVERLib;
+[备注] 
+[图片] ppt/media/image6.png
+
+=== 第 6 页 ===
+汕头大学
+©数控小组
+设计界面
+打开Form1().cs[设计]
+打开工具箱，从公共控件中拖动Button到设计器中
+[备注] 
+[图片] ppt/media/image7.png
+
+=== 第 7 页 ===
+汕头大学
+©数控小组
+编程
+在属性中修改Name为“selectDevice”，Text中修改按键文本为“通讯”，双击“通讯”进入按键响应函数编写
+[备注] 
+[图片] ppt/media/image9.png, ppt/media/image8.png
+
+=== 第 8 页 ===
+汕头大学
+©数控小组
+C# 程序结构
+一个 C# 程序主要包括以下部分：
+ 命名空间声明（Namespace declaration）
+ 一个 class
+ Class 方法
+ Class 属性
+ 一个 Main 方法
+ 语句（Statements）& 表达式（Expressions）
+ 注释
+[备注] 
+[图片] 
+
+=== 第 9 页 ===
+汕头大学
+©数控小组
+附录
+打开属性修改.Net Framework 为 .Net Framework 3.5 否则会出现该错误
+[备注] 
+[图片] ppt/media/image10.png
+
+=== 第 10 页 ===
+汕头大学
+©数控小组
+程序逻辑
+先运行Main，再run Form1
+[备注] 
+[图片] ppt/media/image11.png
+
+=== 第 11 页 ===
+汕头大学
+©数控小组
+附录
+public virtual void GetResponse(int dwDevice, string question, out string pAnswer)
+    PMACSERVERLib.PmacDeviceClass 的成员
+参数说明： dwDevice    设备号    0-7
+		 question      命令字符串，如“#1J+”、“”P801“
+              pAnswer        “P801的值”  
+[备注] 
+[图片] ppt/media/image12.png
+
+=== 第 12 页 ===
+汕头大学
+©数控小组
+附录
+[备注] 
+[图片] ppt/media/image14.png, ppt/media/image13.png

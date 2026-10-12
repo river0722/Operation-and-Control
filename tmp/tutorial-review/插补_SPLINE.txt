@@ -1,0 +1,31 @@
+CLOSE /*确认所有缓冲区被关闭*/
+DELETE GATHER
+UNDEFINE ALL
+END GAT //停止收集
+DEL GAT//删除收集
+&1         /*坐标系为1*/
+#1->1000X ; 1000 counts is 1 user unit for X axis
+#2->1000Y ; 1000 counts is 1 user unit for Y axis
+I42 = 0 ; Use TM to adjust Spline move time
+Open Prog 7 Clear
+CMD "DEL GAT" //删除收集
+CMD "DEF GAT" //定义收集缓冲区
+CMD "GAT" //开始采集
+RAPID X 0 Y 0 //快速回到原点
+DWELL 0
+ABS ; Absolute position programming
+Spline1 TM 1000 ; Set up move mode and move time
+X 1 Y -1 ; Move X to 1 user units, Y to -1 user units
+X 2 Y -2 ; Move X to 2 user units, Y to -2 user units
+X 3 Y -3 ; Move X to 3 user units, Y to -3 user units
+Dwell 0 ; Do not blend into next move
+Spline2 TM 250 ; Set up move mode and move time
+Dwell 0 ; Do not blend into next move
+X 2 Y -2 ; Move X to 2 user units, Y to -2 user units
+TM 100 ; Adjust move time on the fly
+X 1 Y -1 ; Move X to 1 user units, Y to -1 user units
+TM 10 ; Adjust move time on the fly
+X 0 Y 0 ; Move X to 0 user units, Y to 0 user units
+DWELL 0 //防止过早停止采集
+CMD "END GAT" //停止收集
+Close

@@ -1,0 +1,258 @@
+[
+  {
+    "slide": 1,
+    "text": [
+      "使用Setup让电机动起来",
+      "2019年7月8日",
+      "©数控小组",
+      "汕头大学"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 2,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "两种方式",
+      "方式1：对于初学者，使用TurboSetup32Pro2，它采用向导界面，帮助我们设置Turbo \t\t\tPMAC卡；",
+      "方式2：通过设置I变量到PID调试",
+      "注意：本教程和其他教程用1号电机调试，如Ixx00，xx代表1号电机，若对其他电机，需找到对应变量解释以及赋值"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 3,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "方式1",
+      "从Tools中打开Setup Pro2，按照引导操作",
+      "操作"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image1.png"
+    ]
+  },
+  {
+    "slide": 4,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "方式1",
+      "选卡型，next",
+      "操作"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image2.png"
+    ]
+  },
+  {
+    "slide": 5,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "方式1",
+      "默认值即可，next，出现上述选择产生对应要配置的I变量及赋值，ok",
+      "操作"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image4.png",
+      "ppt/media/image3.png"
+    ]
+  },
+  {
+    "slide": 6,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "电机类型选择",
+      "选择需要配置的电机，虽然是交流伺服电机，但对于驱动器控制信号接线上采用脉冲加反向，因此选择stepper",
+      "操作",
+      "I101=0 //不换相，=1换向",
+      "I100=1//激活",
+      "I变量解释"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image6.png",
+      "ppt/media/image5.png"
+    ]
+  },
+  {
+    "slide": 7,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "换向方法和输出通道选择",
+      "Continue",
+      "操作",
+      "选择通道2对应I7mn3改变",
+      "I变量解释"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image8.png",
+      "ppt/media/image7.png"
+    ]
+  },
+  {
+    "slide": 8,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "输入通道选择—屏蔽报警",
+      "如没有限位开关，屏蔽报警，Continue",
+      "操作"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image10.png",
+      "ppt/media/image9.png"
+    ]
+  },
+  {
+    "slide": 9,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "配置位置环编码器和通道选择",
+      "增量式编码盘，Continue，X4编码，continue",
+      "操作"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image12.png",
+      "ppt/media/image11.png",
+      "ppt/media/image13.png"
+    ]
+  },
+  {
+    "slide": 10,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "配置速度环编码器和通道选择",
+      "选卡型，next",
+      "操作"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image15.png",
+      "ppt/media/image14.png",
+      "ppt/media/image16.png"
+    ]
+  },
+  {
+    "slide": 11,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "开环测试",
+      "选卡型，next",
+      "操作"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image18.png",
+      "ppt/media/image17.png"
+    ]
+  },
+  {
+    "slide": 12,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "开环测试",
+      "选卡型，next",
+      "操作"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image20.png",
+      "ppt/media/image19.png"
+    ]
+  },
+  {
+    "slide": 13,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "闭环测试",
+      "Do a step，看到响应时间过长，应增大P增益",
+      "操作"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image22.png",
+      "ppt/media/image21.png"
+    ]
+  },
+  {
+    "slide": 14,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "调节闭环响应曲线",
+      "一般先调P，如右图修改参数，先把I增益，D增益设为0，增大P",
+      "操作"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image24.png",
+      "ppt/media/image23.png",
+      "ppt/media/image25.png"
+    ]
+  },
+  {
+    "slide": 15,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "调节闭环响应曲线",
+      "继续增大P",
+      "操作"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image27.png",
+      "ppt/media/image26.png"
+    ]
+  },
+  {
+    "slide": 16,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "调节闭环响应曲线",
+      "调试完毕",
+      "操作"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image29.png",
+      "ppt/media/image28.png",
+      "ppt/media/image31.png",
+      "ppt/media/image30.png"
+    ]
+  },
+  {
+    "slide": 17,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "JOG",
+      "调试完毕后保存备份参数，从view中打开Jog面板，手动Jog电机",
+      "操作"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image32.png"
+    ]
+  }
+]

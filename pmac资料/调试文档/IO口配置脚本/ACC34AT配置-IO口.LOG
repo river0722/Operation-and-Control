@@ -1,0 +1,15 @@
+;Log created by PMAC Win32 Driver from file: F:\周报\芯片倒装焊接机项目\品冠备份资料\备份资料\调试文档\IO口配置脚本\ACC34AT配置-IO口.pmc
+;
+000001:            Processing Macro File: F:\周报\芯片倒装焊接机项目\品冠备份资料\备份资料\调试文档\IO口配置脚本\ACC34AT配置-IO口.pmc
+000002:            $60450
+000003:            Total Lines: 72
+000004:            Compiling for PLCC: F:\周报\芯片倒装焊接机项目\品冠备份资料\备份资料\调试文档\IO口配置脚本\ACC34AT配置-IO口.PMA = F:\周报\芯片倒装焊接机项目\品冠备份资料\备份资料\调试文档\IO口配置脚本\ACC34AT配置-IO口.56K
+000005:            PLCC Compiling PMAC file: F:\周报\芯片倒装焊接机项目\品冠备份资料\备份资料\调试文档\IO口配置脚本\ACC34AT配置-IO口.PMA
+000006:            Success in Compiling to output file: F:\周报\芯片倒装焊接机项目\品冠备份资料\备份资料\调试文档\IO口配置脚本\ACC34AT配置-IO口.56K
+000007:            No PLCC(s) were compiled
+000008:            Downloading file: F:\周报\芯片倒装焊接机项目\品冠备份资料\备份资料\调试文档\IO口配置脚本\ACC34AT配置-IO口.56K
+000009:            Downloaded 56 lines in 44 msecs
+000010:            Writing MAP file: F:\周报\芯片倒装焊接机项目\品冠备份资料\备份资料\调试文档\IO口配置脚本\ACC34AT配置-IO口.MAP
+000011:            Writing macro dictionary table: F:\周报\芯片倒装焊接机项目\品冠备份资料\备份资料\调试文档\IO口配置脚本\ACC34AT配置-IO口.TBL
+000012:            Total Warnings: 0
+000013:            Total Errors: 0

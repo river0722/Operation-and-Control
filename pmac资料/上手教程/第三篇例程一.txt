@@ -1,0 +1,44 @@
+CLOSE
+OPEN PLC 1 CLEAR
+IF(P801=1)//向左走
+	I113=0
+	I114=0
+	I122=20
+	COMMAND"#1J-"
+	P801=2
+ELSE   
+	IF(P801=2)   
+		IF(M120=0)   //到达home标志
+			COMMAND"#1J/"  //停止
+			P801=3
+		ENDIF
+		IF(M122=1)   //到达负限位往正走偏置量
+			P801=-1
+			COMMAND"#1J^200000" //最小1600000
+		ENDIF
+	ENDIF
+	
+	IF(P801=-1)  //在负限位和零点时动作
+		IF(M133=1)   //若到位信息为零,是否走往偏执量
+			P801=1
+		ENDIF
+	ENDIF
+	
+	IF(P801=3)
+		I123=-1
+		I7012=15
+		COMMAND"#1HOME"
+		P801=4
+	ENDIF
+	IF(P801=4)AND(M211<4000)AND(M211>-4000)
+		P801=5
+	ENDIF
+	IF(P801=5)
+		COMMAND"#1HOMEZ"//设为原点
+		P801=6 //完成回零
+		I113=884000
+		I114=-65000
+	ENDIF
+
+	ENDIF
+CLOSE

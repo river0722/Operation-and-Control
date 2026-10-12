@@ -1,0 +1,273 @@
+[
+  {
+    "slide": 1,
+    "text": [
+      "直线圆弧插补",
+      "2019年7月22日",
+      "©数控小组",
+      "汕头大学"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 2,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "规划路径"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image2.png",
+      "ppt/media/image1.png"
+    ]
+  },
+  {
+    "slide": 3,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "直线圆弧插补例程",
+      "&1         /*坐标系为1*/",
+      "CLOSE /*确认所有缓冲区被关闭*/",
+      "DELETE GATHER",
+      "UNDEFINE ALL",
+      "END GAT //停止收集",
+      "DEL GAT//删除收集",
+      "i117=1 //#1 max acceleration",
+      "i116=10 //max program velocity",
+      "i217=1 // #2 max acceleration",
+      "i216=10 //max program velocity",
+      "i5113 = 10 //粗插补时间",
+      "#1->1638.4X",
+      "#2->1638.4Y",
+      "OPEN PROG 4 CLEAR",
+      "CMD \"DEL GAT\" //删除收集",
+      "CMD \"DEF GAT\" //定义收集缓冲区",
+      "CMD \"GAT\" //开始采集",
+      "RAPID X 0 Y 0 //快速回到原点",
+      "DWELL 0",
+      "LINEAR //直线运动",
+      "ABS //绝对位置",
+      "TM 200 //move time",
+      "X ( 10*sqrt(3)/2 ) Y -5",
+      "DWELL 0 //如果注释掉这条语句，那直线运动和接下来的圆弧运动便会混合",
+      "//最后形成“圆角”",
+      "F 6 //限制最大速度， 对于这程序是 6*1000 cts 每秒",
+      "NORMAL K -1 //坐标系",
+      "CIRCLE1 X ( 10*sqrt(3)/2 ) Y 5 I ( -10*sqrt(3)/2 ) J 5",
+      "//CIRCLE1 顺时针",
+      "// X ( 10*sqrt(3)/2 ) Y 5 是终点坐标",
+      "//I ( -10*sqrt(3)/2 ) J 5 是起点到圆心的向量",
+      "DWELL 0",
+      "LINEAR //直线运动",
+      "ABS",
+      "TM 100",
+      "X ( 5*sqrt(3)/2 ) Y 2.5",
+      "//这里没有加 dwell ，它的运动是“混合的”，速度从直线到圆弧平滑过渡",
+      "NORMAL K -1 CIRCLE1 X ( 5*sqrt(3)/2 ) Y 2.5 I -1.25 J ( 1.25*sqrt(3)/2 )",
+      "LINEAR ABS TM 100 X 0 Y 0",
+      "//为保证运动的实时性，控制卡会提前“看”几步，比如下一句没有 dwell 的话，控制器会提前看到“end gat”",
+      "// 有可能这时候电机还在走运动，但是已经提前 end gat，导致没采完数据",
+      "DWELL 0 //防止过早停止采集",
+      "CMD \"END GAT\" //停止收集",
+      "CLOSE",
+      "例程：来源泰道中国——技术支持——运动程序——直线圆弧运动"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 4,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "直线圆弧插补例程",
+      "出现图示错误，一般为Kill电机之后，解决方式：先Ctrl+A，再运行程序",
+      "<CTRL-A> –退出所有运动程序和运动",
+      "<CTRL-D> –让所有 PLC 和 PLCC 程序无效",
+      "<CTRL-K> –让所有电机的断电"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image3.png"
+    ]
+  },
+  {
+    "slide": 5,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "直线圆弧插补例程",
+      "从 Tools 中打开 PMAC PLOT数据采集软件，纵坐标选择2电机位置，横坐标选择1号电机位置。"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image4.png"
+    ]
+  },
+  {
+    "slide": 6,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "直线圆弧插补例程"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image5.png"
+    ]
+  },
+  {
+    "slide": 7,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "语法",
+      "分段模式下 Isx13 的一般设定值为 5 到 20 毫秒。Isx13 的值越小，与真实曲线的契合度就越高，但是，运动所需计算越多，后台任务可用的就越少。",
+      "对1号电机 I5113=10//推荐",
+      "Isx13  坐标系 x 分段时间",
+      "要指定 XY 平面上的圆弧，命令 NORMAL K-1（等价于机床代码 G17）",
+      "指定插补平面",
+      " CIRCLE1 用于顺时针圆弧（等价于 G02）或者 CIRCLE2 用于逆时针圆弧（等价于 G03）",
+      "圆弧方向",
+      "坐标系I变量 Isx11-Isx99：对于坐标系 1—9，s 等于 5，x 等于坐标系号；",
+      "对于坐标系 10—16，s等于 6，x 等于坐标系号减去 10。",
+      "语法：X __Y __ 是终点坐标",
+      "I __ J __ 是起点到圆心的向量"
+    ],
+    "notes": [
+      "",
+      "7"
+    ],
+    "images": []
+  },
+  {
+    "slide": 8,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "中级培训手册参考"
+    ],
+    "notes": [
+      "",
+      "8"
+    ],
+    "images": [
+      "ppt/media/image6.png"
+    ]
+  },
+  {
+    "slide": 9,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "修改中级培训手册例程运行"
+    ],
+    "notes": [
+      "",
+      "9"
+    ],
+    "images": [
+      "ppt/media/image7.png"
+    ]
+  },
+  {
+    "slide": 10,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "作业：修改中级培训手册例程运行",
+      ";Setup and definitions",
+      "&1",
+      "#3->10000x",
+      "#4->10000y",
+      "i13=10",
+      ";Motion Program Text",
+      "open prog4 clear",
+      "normal K-1",
+      "rapid x1 y4",
+      "f5",
+      "linear y13",
+      "circle1 x2 y14 i1 j0",
+      "linear x3",
+      "circle1 x4 y13 i0 j-1",
+      "linear y7",
+      "circle2 x7 y4 i3 j0",
+      "linear x13",
+      "circle1 x14 y3 i0 j-1",
+      "linear y2",
+      "circle1 x13 y1 i-1 j0",
+      "linear x4",
+      "circle1 x1 y4 i0 j4",
+      "dwell100",
+      "rapid x0 y0",
+      "close",
+      "例程："
+    ],
+    "notes": [
+      "&1         /*坐标系为1*/",
+      "CLOSE /*确认所有缓冲区被关闭*/",
+      "DELETE GATHER",
+      "UNDEFINE ALL",
+      "END GAT //停止收集",
+      "DEL GAT//删除收集",
+      "i117=1 //#1 max acceleration",
+      "i116=10 //max program velocity",
+      "i217=1 // #2 max acceleration",
+      "i216=10 //max program velocity",
+      "i5113 = 10 //粗插补时间",
+      "#1->1638.4X",
+      "#2->1638.4Y",
+      ";Motion Program Text",
+      "open prog 6 clear",
+      "CMD \"DEL GAT\" //删除收集",
+      "CMD \"DEF GAT\" //定义收集缓冲区",
+      "CMD \"GAT\" //开始采集",
+      "normal K-1",
+      "rapid x1 y4",
+      "f 5",
+      "linear y13",
+      "circle1 x2 y14 i1 j0",
+      "linear x3",
+      "circle1 x4 y13 i0 j-1",
+      "linear y7",
+      "circle2 x7 y4 i3 j0",
+      "linear x13",
+      "circle1 x14 y3 i0 j-1",
+      "linear y2",
+      "circle1 x13 y1 i-1 j0",
+      "linear x4",
+      "circle1 x1 y4 i0 j4",
+      "dwell 100",
+      "rapid x0 y0",
+      "DWELL 0 //防止过早停止采集",
+      "CMD \"END GAT\" //停止收集",
+      "CLOSE",
+      "",
+      "10"
+    ],
+    "images": [
+      "ppt/media/image8.png"
+    ]
+  },
+  {
+    "slide": 11,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "对应官方资料",
+      "PDF",
+      "标题",
+      "起始页",
+      "泰道中国： http://www.deltatau-china.com/html/ydcx/index.html",
+      "直线圆弧插补",
+      "PMAC 技术培训（中级）",
+      "圆弧插补 例程",
+      "36"
+    ],
+    "notes": [],
+    "images": []
+  }
+]

@@ -1,0 +1,218 @@
+[
+  {
+    "slide": 1,
+    "text": [
+      "Spline运动",
+      "2019年7月22日",
+      "©数控小组",
+      "汕头大学"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 2,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "SPLINE",
+      "PMAC能够执行使样条运动。其中SPLINE1模式是利用了均匀非有理三次样条，",
+      "SPLINE2模式是利用了不均匀非有理三次样条。",
+      "SPLINE1",
+      "功能：将程序置于一致三次样条运动模式",
+      "类型：运动程序(PROG 和 ROT)",
+      "语法：SPLlNE1",
+      "SPLINE2",
+      "功能：将程序置于非一致三次样条运动模式",
+      "类型：运动程序（PROG 和 ROT）",
+      "语法：SPLlNE2",
+      "所谓样条曲线(Spline Curves)是指给定一组控制点而得到一条曲线，曲线的大致形状由这些点予以控制，一般可分为插值样条和逼近样条两种——百度百科"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image1.png"
+    ]
+  },
+  {
+    "slide": 3,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "语句",
+      "为每个轴指定一个 PVT 模式移动是通过语句形式{ { 轴 }{ 数据 }:{ 数据} }，其中",
+      "{ { 轴} }是一个指定轴的字母；第一个{ { 数据} }是一个值，指定终点位置或段的距离（取决于轴是处于绝对或增量模式）；第二个{ { 数据} }是一个表示结束速度的值。",
+      "如：INC  //增量式坐标",
+      "\tPVT 200 //运动时间200ms",
+      "\tX 10:5  //X轴运动距离10mm 结束速度为5"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 4,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "SPLINE例程",
+      "CLOSE /*确认所有缓冲区被关闭*/",
+      "DELETE GATHER",
+      "UNDEFINE ALL",
+      "END GAT //停止收集",
+      "DEL GAT//删除收集",
+      "&1         /*坐标系为1*/",
+      "#1->1000X ; 1000 counts is 1 user unit for X axis",
+      "#2->1000Y ; 1000 counts is 1 user unit for Y axis",
+      "I42 = 0 ; Use TM to adjust Spline move time",
+      "Open Prog 7 Clear",
+      "CMD \"DEL GAT\" //删除收集",
+      "CMD \"DEF GAT\" //定义收集缓冲区",
+      "CMD \"GAT\" //开始采集",
+      "RAPID X 0 Y 0 //快速回到原点",
+      "DWELL 0",
+      "ABS ; Absolute position programming",
+      "Spline1 TM 1000 ; Set up move mode and move time",
+      "X 1 Y 1 ; Move X to 1 user units, Y to -1 user units",
+      "X 2 Y 2 ; Move X to 2 user units, Y to -2 user units",
+      "X 3 Y 3 ; Move X to 3 user units, Y to -3 user units",
+      "Dwell 0 ; Do not blend into next move",
+      "Spline2 TM 250 ; Set up move mode and move time",
+      "Dwell 0 ; Do not blend into next move",
+      "X 2 Y 2 ; Move X to 2 user units, Y to -2 user units",
+      "TM 100 ; Adjust move time on the fly",
+      "X 1 Y 1 ; Move X to 1 user units, Y to -1 user units",
+      "TM 10 ; Adjust move time on the fly",
+      "X 0 Y 0 ; Move X to 0 user units, Y to 0 user units",
+      "DWELL 0 //防止过早停止采集",
+      "CMD \"END GAT\" //停止收集",
+      "Close",
+      "例程：来源泰道中国——技术支持——运动程序——SPLINE"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 5,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "Plot",
+      "速度100,000"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image2.png"
+    ]
+  },
+  {
+    "slide": 6,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "对应官方资料",
+      "PDF",
+      "标题",
+      "起始页",
+      "泰道中国： http://www.deltatau-china.com/html/ydcx/index.html",
+      "PVT运动",
+      "TURBO PMAC(PMAC2) SRM（中文版）",
+      "16-11 PVT 模式移动",
+      "331"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 7,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "PVT",
+      "对于要求直接地控制轨迹图形的用户，PMAC提供了位置-速度-时间（PVT）运动模式，在这些运动中，用户在运动时间的转换时直接指定轴的状态，这样要求上微机进行更多的运算，但是却允许对轨迹图形进行更紧凑的控制 。"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image3.png"
+    ]
+  },
+  {
+    "slide": 8,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "语句",
+      "为每个轴指定一个 PVT 模式移动是通过语句形式{ { 轴 }{ 数据 }:{ 数据} }，其中",
+      "{ { 轴} }是一个指定轴的字母；第一个{ { 数据} }是一个值，指定终点位置或段的距离（取决于轴是处于绝对或增量模式）；第二个{ { 数据} }是一个表示结束速度的值。",
+      "如：INC  //增量式坐标",
+      "\tPVT 200 //运动时间200ms",
+      "\tX 10:5  //X轴运动距离10mm 结束速度为5"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 9,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "PVT例程",
+      "CLOSE /*确认所有缓冲区被关闭*/",
+      "DELETE GATHER",
+      "UNDEFINE ALL",
+      "END GAT //停止收集",
+      "DEL GAT//删除收集",
+      "&1         /*坐标系为1*/",
+      "#1->100X   //X轴放大100",
+      "OPEN PROG 6 CLEAR",
+      "CMD \"DEL GAT\" //删除收集",
+      "CMD \"DEF GAT\" //定义收集缓冲区",
+      "CMD \"GAT\" //开始采集",
+      "INC  //增量式",
+      "PVT 200  //PVT mode with move time T=200msec",
+      "X 133.333:1000 //Move 1：P=133.333，V=1000",
+      "PVT 100",
+      "X 100:1000",
+      "X 96.667:900",
+      "PVT 200",
+      "X 140:500",
+      "PVT 500",
+      "X 83.333:0",
+      "DWELL 0 //防止过早停止采集",
+      "CMD \"END GAT\" //停止收集",
+      "CLOSE",
+      "例程：来源泰道中国——技术支持——运动程序——PVT"
+    ],
+    "notes": [],
+    "images": []
+  },
+  {
+    "slide": 10,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "Plot",
+      "速度100,000"
+    ],
+    "notes": [],
+    "images": [
+      "ppt/media/image2.png"
+    ]
+  },
+  {
+    "slide": 11,
+    "text": [
+      "汕头大学",
+      "©数控小组",
+      "对应官方资料",
+      "PDF",
+      "标题",
+      "起始页",
+      "泰道中国： http://www.deltatau-china.com/html/ydcx/index.html",
+      "PVT运动",
+      "TURBO PMAC(PMAC2) SRM（中文版）",
+      "16-11 PVT 模式移动",
+      "331"
+    ],
+    "notes": [],
+    "images": []
+  }
+]

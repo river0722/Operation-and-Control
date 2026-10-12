@@ -1,0 +1,13 @@
+# Visual Studio settings and build output
+**/.vs/
+**/bin/
+**/obj/
+*.user
+*.suo
+
+# Python and operating system caches
+__pycache__/
+*.py[cod]
+.DS_Store
+Thumbs.db
+Desktop.ini

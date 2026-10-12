@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{974524AC-461D-44CB-A055-B2C47076EBAA}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Operations_Control</RootNamespace>
+    <AssemblyName>Operations Control</AssemblyName>
+    <ApplicationIcon>Assets\pmac-console.ico</ApplicationIcon>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Deployment" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Form1.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Form1.Designer.cs">
+      <DependentUpon>Form1.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Program.cs" />
+    <Compile Include="Controls\UiTheme.cs" />
+    <Compile Include="Controls\AxisReadout.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Models\ControllerModels.cs" />
+    <Compile Include="Services\IControllerTransport.cs" />
+    <Compile Include="Services\SimulatorTransport.cs" />
+    <Compile Include="Services\PcommTransport.cs" />
+    <Compile Include="Services\ControllerSession.cs" />
+    <Compile Include="Views\ConnectionView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Views\MotionView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Views\ProgramView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Views\LogView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <None Include="Assets\pmac-console.ico" />
+    <None Include="Assets\pmac-console.png" />
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Controls\AxisReadout.Designer.cs"><DependentUpon>AxisReadout.cs</DependentUpon></Compile>
+    <Compile Include="Controls\MotionCanvas.cs"><SubType>Component</SubType></Compile>
+    <Compile Include="Models\CanvasModels.cs" />
+    <Compile Include="Models\JogRequestEventArgs.cs" />
+    <Compile Include="Services\CanvasFollower.cs" />
+    <Compile Include="Views\ConnectionView.Designer.cs"><DependentUpon>ConnectionView.cs</DependentUpon></Compile>
+    <Compile Include="Views\MotionView.Designer.cs"><DependentUpon>MotionView.cs</DependentUpon></Compile>
+    <Compile Include="Views\ProgramView.Designer.cs"><DependentUpon>ProgramView.cs</DependentUpon></Compile>
+    <Compile Include="Views\LogView.Designer.cs"><DependentUpon>LogView.cs</DependentUpon></Compile>
+    <Compile Include="Views\ReadoutView.cs"><SubType>UserControl</SubType></Compile>
+    <Compile Include="Views\ReadoutView.Designer.cs"><DependentUpon>ReadoutView.cs</DependentUpon></Compile>
+    <Compile Include="Views\CanvasView.cs"><SubType>UserControl</SubType></Compile>
+    <Compile Include="Views\CanvasView.Designer.cs"><DependentUpon>CanvasView.cs</DependentUpon></Compile>
+    <Compile Include="Views\ProgramEditorForm.cs"><SubType>Form</SubType></Compile>
+    <Compile Include="Views\ProgramEditorForm.Designer.cs"><DependentUpon>ProgramEditorForm.cs</DependentUpon></Compile>
+    <Compile Include="Views\LogForm.cs"><SubType>Form</SubType></Compile>
+    <Compile Include="Views\LogForm.Designer.cs"><DependentUpon>LogForm.cs</DependentUpon></Compile>
+    <EmbeddedResource Include="Form1.resx"><DependentUpon>Form1.cs</DependentUpon></EmbeddedResource>
+    <EmbeddedResource Include="Controls\AxisReadout.resx"><DependentUpon>AxisReadout.cs</DependentUpon></EmbeddedResource>
+    <EmbeddedResource Include="Views\ConnectionView.resx"><DependentUpon>ConnectionView.cs</DependentUpon></EmbeddedResource>
+    <EmbeddedResource Include="Views\MotionView.resx"><DependentUpon>MotionView.cs</DependentUpon></EmbeddedResource>
+    <EmbeddedResource Include="Views\ProgramView.resx"><DependentUpon>ProgramView.cs</DependentUpon></EmbeddedResource>
+    <EmbeddedResource Include="Views\LogView.resx"><DependentUpon>LogView.cs</DependentUpon></EmbeddedResource>
+    <EmbeddedResource Include="Views\ReadoutView.resx"><DependentUpon>ReadoutView.cs</DependentUpon></EmbeddedResource>
+    <EmbeddedResource Include="Views\CanvasView.resx"><DependentUpon>CanvasView.cs</DependentUpon></EmbeddedResource>
+    <EmbeddedResource Include="Views\ProgramEditorForm.resx"><DependentUpon>ProgramEditorForm.cs</DependentUpon></EmbeddedResource>
+    <EmbeddedResource Include="Views\LogForm.resx"><DependentUpon>LogForm.cs</DependentUpon></EmbeddedResource>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>
