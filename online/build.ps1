@@ -1,7 +1,8 @@
 param(
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release',
-    [switch]$Test
+    [switch]$Test,
+    [string]$ScreenshotDirectory
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,6 +37,13 @@ if ($Test) {
     $source = Join-Path $projectRoot 'Tests\SmokeTests.cs'
     & $compiler /nologo /target:exe /platform:x86 "/out:$runner" "/reference:$application" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Core.dll /reference:System.Design.dll $source
     if ($LASTEXITCODE -ne 0) { throw 'Smoke test compilation failed.' }
-    & $runner (Join-Path $PSScriptRoot 'screenshots')
+    if (-not $ScreenshotDirectory) { $ScreenshotDirectory = Join-Path $PSScriptRoot 'screenshots' }
+    & $runner $ScreenshotDirectory
     if ($LASTEXITCODE -ne 0) { throw 'Smoke tests failed.' }
+    $featureRunner = Join-Path $output 'OperationsControl.WorkflowTests.exe'
+    $featureSource = Join-Path $projectRoot 'Tests\WorkflowTests.cs'
+    & $compiler /nologo /target:exe /platform:x86 "/out:$featureRunner" "/reference:$application" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Core.dll $featureSource
+    if ($LASTEXITCODE -ne 0) { throw 'Workflow test compilation failed.' }
+    & $featureRunner $ScreenshotDirectory
+    if ($LASTEXITCODE -ne 0) { throw 'Workflow tests failed.' }
 }

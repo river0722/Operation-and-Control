@@ -56,6 +56,15 @@
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="Models\ControllerModels.cs" />
+    <Compile Include="Models\PathModels.cs" />
+    <Compile Include="Models\DeviceStatus.cs" />
+    <Compile Include="Services\PathGeometry.cs" />
+    <Compile Include="Services\DxfReader.cs" />
+    <Compile Include="Services\TrajectoryPlanner.cs" />
+    <Compile Include="Services\PmacProgramWriter.cs" />
+    <Compile Include="Services\TrajectoryAnalysis.cs" />
+    <Compile Include="Views\PathView.cs"><SubType>UserControl</SubType></Compile>
+    <Compile Include="Views\PathView.Designer.cs"><DependentUpon>PathView.cs</DependentUpon></Compile>
     <Compile Include="Services\IControllerTransport.cs" />
     <Compile Include="Services\SimulatorTransport.cs" />
     <Compile Include="Services\PcommTransport.cs" />

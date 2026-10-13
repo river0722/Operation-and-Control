@@ -200,8 +200,11 @@ internal static class SmokeTests
             MotionView motion = Find<MotionView>(form);
             ProgramView programs = Find<ProgramView>(form);
             CanvasView canvases = Find<CanvasView>(form);
+            PathView path = Find<PathView>(form);
             ControllerSession session = (ControllerSession)typeof(Form1).GetField("session", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(form);
             Check(connection.IsSimulation, "Simulation must be the default");
+            Check(connection.ConnectButton.Parent.ClientRectangle.Contains(connection.ConnectButton.Bounds) &&
+                connection.DisconnectButton.Parent.ClientRectangle.Contains(connection.DisconnectButton.Bounds), "Connection buttons fit the compact header");
             Check(!motion.MoveButton.Enabled && !programs.SendButton.Enabled, "Disconnected operations must be disabled");
             DrawMouse(canvases.DrawingCanvas, "OnMouseDown", 1, 1);
             DrawMouse(canvases.DrawingCanvas, "OnMouseMove", 2, 2);
@@ -212,9 +215,11 @@ internal static class SmokeTests
             Until(delegate { return connection.DisconnectButton.Enabled; }, "Simulation connection must update UI");
             Pump(550);
             Screenshot(form, Path.Combine(output, "motion-control.png"));
+            path.Pages.SelectedTab = (TabPage)motion.Parent.Parent;
             motion.Target.Value = 100;
             motion.MoveButton.PerformClick();
             Pump(600);
+            Screenshot(form, Path.Combine(output, "manual-control.png"));
             Check(Position(session, form) == 100, "UI absolute move must reach target");
             Button plus = FindButton(motion, "X +");
             Mouse(plus, true); Mouse(plus, false); Pump(300);
@@ -235,19 +240,27 @@ internal static class SmokeTests
             Mouse(plus, true); Pump(60); plus.Capture = true; plus.Capture = false;
             Pump(80); double captureLost = Position(session, form); Pump(80);
             Check(Position(session, form) == captureLost, "Lost mouse capture must stop continuous jogging");
+            path.Pages.SelectedTab = path.ProgramPage;
             programs.Command.Text = "VERSION"; programs.SendButton.PerformClick();
             Until(delegate { return programs.Response.Text.IndexOf("simulator") >= 0; }, "Command response must render");
             Screenshot(form, Path.Combine(output, "commands-and-programs.png"));
             programs.Command.Text = "BAD COMMAND"; programs.SendButton.PerformClick();
             Pump(120); Check(programs.SendButton.Enabled, "Invalid command must leave UI usable");
+            path.Pages.SelectedIndex = 0;
             TestDrawing(form, connection, motion, programs, canvases, session, output);
             form.Size = form.MinimumSize;
             Screenshot(form, Path.Combine(output, "minimum-window.png"));
-            Button stop = FindButton(form, "停止运动");
-            Check(stop.Visible && motion.Contains(stop), "Stop must remain in the reference motion quadrant");
+            Button stop = FindButton(form, "停止");
+            Check(stop.Visible && !path.Contains(stop), "Global stop must stay visible outside all tabs");
             Check(form.RectangleToScreen(form.ClientRectangle).Contains(stop.RectangleToScreen(stop.ClientRectangle)), "Stop must fit at minimum window size");
             Check(!motion.AutoScroll && canvases.DrawingCanvas.Settings.PlotArea(canvases.DrawingCanvas.ClientRectangle).Height > 120,
-                "All quadrants and usable canvas plots must remain visible at minimum size");
+                "Usable canvas plots must remain visible at minimum size");
+            path.Pages.SelectedTab = path.ProgramPage; Pump(100);
+            Check(form.RectangleToScreen(form.ClientRectangle).Contains(programs.SendButton.RectangleToScreen(programs.SendButton.ClientRectangle)) &&
+                form.RectangleToScreen(form.ClientRectangle).Contains(programs.DownloadButton.RectangleToScreen(programs.DownloadButton.ClientRectangle)),
+                "Program commands and download fit the minimum main window");
+            Screenshot(form, Path.Combine(output, "minimum-program.png"));
+            path.Pages.SelectedIndex = 0;
             connection.DisconnectButton.PerformClick();
             Until(delegate { return connection.ConnectButton.Enabled; }, "Disconnect must clear UI state");
             Check(!motion.MoveButton.Enabled, "Disconnected movement must be disabled again");
@@ -307,11 +320,11 @@ internal static class SmokeTests
         Pump(150); double deactivated = Position(session, form); Pump(150);
         Check(Position(session, form) == deactivated && !canvases.DrawingCanvas.IsDrawing, "Window deactivation must cancel drawing follow");
         DrawMouse(canvases.DrawingCanvas, "OnMouseDown", 8, 8); Pump(110);
-        motion.StopButton.PerformClick(); Pump(150);
+        FindButton(form, "停止").PerformClick(); Pump(150);
         double buttonStopped = Position(session, form); Pump(150);
         Check(Position(session, form) == buttonStopped && !canvases.DrawingCanvas.IsDrawing, "Stop button must cancel drawing before stopping axes");
 
-        FindButton(canvases, "清除轨迹").PerformClick(); FindButton(canvases, "清除绘图").PerformClick();
+        FindButton(form, "清空轨迹").PerformClick(); FindButton(form, "清空绘图").PerformClick();
         Check(canvases.DrawingCanvas.PointCount == 0 && Position(session, form) == buttonStopped, "Clearing canvases must not move motors");
         DrawMouse(canvases.DrawingCanvas, "OnMouseDown", 6, 0); Pump(300);
         for (int i = 1; i <= 24; i++)
@@ -322,11 +335,13 @@ internal static class SmokeTests
         DrawMouse(canvases.DrawingCanvas, "OnMouseUp", 6, 0); Pump(150);
         programs.Command.Clear();
         Screenshot(form, Path.Combine(output, "dual-canvases.png"));
+        PathView path = Find<PathView>(form); path.Pages.SelectedTab = path.ProgramPage;
         programs.EditButton.PerformClick(); Pump(100);
         ProgramEditorForm editor = (ProgramEditorForm)typeof(Form1).GetField("editorWindow", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(form);
         editor.Editor.Text = "OPEN PROG 1\r\n; 在此编辑 PMAC 程序\r\nCLOSE";
-        Screenshot(editor, Path.Combine(output, "program-editor.png")); editor.Editor.Clear(); editor.Close();
-        Check(!editor.IsDisposed && !editor.Visible, "Closing auxiliary editor must preserve the reusable window");
+        Screenshot(form, Path.Combine(output, "program-editor.png")); editor.Editor.Clear();
+        Check(!editor.TopLevel && editor.Visible && form.Contains(editor), "Editor must stay embedded in the main program page");
+        path.Pages.SelectedIndex = 0;
 
         canvases.Follow.Checked = true; DrawMouse(canvases.DrawingCanvas, "OnMouseDown", -8, -8); Pump(110);
         connection.DisconnectButton.PerformClick();
@@ -341,7 +356,7 @@ internal static class SmokeTests
     private static void TestDesigner()
     {
         Type[] views = new Type[] { typeof(Form1), typeof(ConnectionView), typeof(MotionView), typeof(ProgramView), typeof(LogView),
-            typeof(AxisReadout), typeof(ReadoutView), typeof(CanvasView), typeof(ProgramEditorForm), typeof(LogForm) };
+            typeof(AxisReadout), typeof(ReadoutView), typeof(CanvasView), typeof(PathView), typeof(ProgramEditorForm), typeof(LogForm) };
         foreach (Type type in views)
         {
             using (DesignSurface surface = new DesignSurface(type))

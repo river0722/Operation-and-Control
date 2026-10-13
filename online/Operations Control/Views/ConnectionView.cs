@@ -21,7 +21,7 @@ namespace Operations_Control.Views
             DisconnectButton.Enabled = connected && !busy;
             status.Text = busy ? "正在处理…" : connected ? "已连接" : "未连接";
             status.ForeColor = connected ? UiTheme.Success : UiTheme.Muted;
-            device.Text = connected ? deviceName : "连接后开始读取轴位置";
+            device.Text = connected ? deviceName : String.Empty;
         }
     }
 }

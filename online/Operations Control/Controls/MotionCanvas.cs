@@ -48,6 +48,23 @@ namespace Operations_Control.Controls
 
         public void ClearPath() { points.Clear(); newSegment = true; Invalidate(); }
         public void BreakPath() { newSegment = true; }
+        public DrawingPath GetPath()
+        {
+            DrawingPath result = new DrawingPath(); List<MotionPoint> stroke = null;
+            foreach (Vertex vertex in points)
+            {
+                if (stroke == null || vertex.Break) { stroke = new List<MotionPoint>(); result.Strokes.Add(stroke); }
+                stroke.Add(vertex.Point);
+            }
+            result.Strokes.RemoveAll(delegate(List<MotionPoint> item) { return item.Count < 2; }); return result;
+        }
+        public void LoadPath(DrawingPath path)
+        {
+            points.Clear();
+            if (path != null) foreach (List<MotionPoint> stroke in path.Strokes)
+                for (int i = 0; i < stroke.Count; i++) points.Add(new Vertex(stroke[i], i == 0));
+            newSegment = true; Invalidate();
+        }
         public void Append(MotionPoint point)
         {
             if (Double.IsNaN(point.X) || Double.IsNaN(point.Y) || Double.IsInfinity(point.X) || Double.IsInfinity(point.Y)) return;

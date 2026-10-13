@@ -97,6 +97,11 @@ namespace Operations_Control.Views
         }
 
         public void BreakTrace() { ActualCanvas.BreakPath(); }
+        public void ShowSettingsOnly()
+        {
+            plotsLayout.Visible = false; canvasLayout.RowStyles[1].SizeType = SizeType.Absolute;
+            canvasLayout.RowStyles[1].Height = 0; Dock = DockStyle.Fill;
+        }
         private void ClearTrace(object sender, EventArgs e) { ActualCanvas.ClearPath(); }
         private void ClearDrawing(object sender, EventArgs e) { DrawingCanvas.EndStroke(); DrawingCanvas.ClearPath(); }
     }

@@ -27,6 +27,7 @@ namespace Operations_Control
         private string filePath;
         private string savedText = String.Empty;
         private Encoding fileEncoding = new UTF8Encoding(false);
+        private PathView pathView;
 
         public Form1()
         {
@@ -40,8 +41,9 @@ namespace Operations_Control
             editorWindow = new ProgramEditorForm(); logWindow = new LogForm(); log = logWindow.Log;
             editorWindow.Icon = Icon; logWindow.Icon = Icon;
             components.Add(editorWindow); components.Add(logWindow);
-            WireEvents();
             canvases.ConfigureMode(connection.IsSimulation);
+            IntegrateViews();
+            WireEvents();
             readouts.Clear(motion.XAxis, motion.YAxis, motion.Motor);
             refreshTimer.Start();
             drawTimer.Start();
@@ -49,27 +51,44 @@ namespace Operations_Control
             log.Append("信息", "请选择连接模式并连接设备。模拟模式不会访问实际控制卡。");
         }
 
-        private void ShowHelp(object sender, EventArgs e)
-        {
-            MessageBox.Show(this,
-                "1. 选择模拟模式或 PMAC 实机，点击连接设备。\n" +
-                "2. 选择电机、速度和步长。连续点动需按住按钮，松开即停止；键盘可使用空格。\n" +
-                "3. 单轴定位使用绝对位置；当前位置置零发送 HOMEZ，不执行机械回零。\n" +
-                "4. 程序控制区可发送命令；程序编辑与操作日志可从菜单打开。\n" +
-                "5. 左画布显示反馈轨迹，右画布按住鼠标左键绘图。勾选跟随后，松开或移出画布即停止。\n" +
-                "6. 模拟画布默认 ±10 mm、100 ct/mm。实机需填写实际 X/Y ct/mm 与行程，再应用坐标。\n\n" +
-                "画布以电机零点为零点，单位为 mm；手动控制为 ct / ct/ms。\n" +
-                "鼠标跟随为独立双轴目标更新，不保证按绘制路径进行直线插补。\n" +
-                "软件停止作用于 X、Y 和所选电机，不能替代硬件急停。\n" +
-                "实机模式需要已安装并配置的 32 位 PcommServer / PMAC 驱动。",
-                "使用说明", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
+        private void ShowEditor(object sender, EventArgs e) { pathView.Pages.SelectedTab = pathView.ProgramPage; editorWindow.Editor.Focus(); }
 
-        private void ShowEditor(object sender, EventArgs e) { editorWindow.Show(this); editorWindow.Activate(); }
-        private void ShowLog(object sender, EventArgs e) { logWindow.Show(this); logWindow.Activate(); }
-        private void ShowAbout(object sender, EventArgs e)
+        private void IntegrateViews()
         {
-            MessageBox.Show(this, "PMAC 上位机控制程序\n原生控件 · 四分区布局 · 反馈轨迹与鼠标绘图\nX 默认电机 1，Y 默认电机 2。", "关于", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            pathView = new PathView(session, connection.IsSimulation, canvases.Settings, canvases.MappingReady,
+                motion.XAxis, motion.YAxis, canvases) { Dock = DockStyle.Fill };
+            pathView.AddCoordinateSettings(canvases);
+            workspaceTabs.TabPages.Remove(manualPage);
+            // Rebuild page order before handles exist; Framework 3.5 Insert can lose a native tab.
+            TabPage[] pages = new TabPage[] { pathView.Pages.TabPages[0], manualPage,
+                pathView.ProgramPage, pathView.Pages.TabPages[2], pathView.SettingsPage };
+            pathView.Pages.TabPages.Clear(); pathView.Pages.TabPages.AddRange(pages);
+            Control generated = pathView.ProgramPage.Controls[0];
+            TableLayoutPanel programLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
+            programLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            programLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); programLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            GroupBox generatedGroup = new GroupBox { Text = "规划程序", Dock = DockStyle.Fill };
+            GroupBox fileGroup = new GroupBox { Text = "自定义程序", Dock = DockStyle.Fill };
+            generatedGroup.Controls.Add(generated);
+            TableLayoutPanel files = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
+            files.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            files.RowStyles.Add(new RowStyle(SizeType.Absolute, 230)); files.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            editorWindow.TopLevel = false; editorWindow.FormBorderStyle = FormBorderStyle.None; editorWindow.MinimumSize = Size.Empty; editorWindow.Dock = DockStyle.Fill;
+            editorWindow.HideSaveToolbar();
+            files.Controls.Add(programs, 0, 0); files.Controls.Add(editorWindow, 0, 1); fileGroup.Controls.Add(files);
+            programLayout.Controls.Add(generatedGroup, 0, 0); programLayout.Controls.Add(fileGroup, 1, 0); pathView.ProgramPage.Controls.Add(programLayout); editorWindow.Show();
+            logPage = new TabPage("日志"); logWindow.TopLevel = false; logWindow.FormBorderStyle = FormBorderStyle.None; logWindow.MinimumSize = Size.Empty; logWindow.Dock = DockStyle.Fill;
+            logPage.Controls.Add(logWindow); pathView.Pages.TabPages.Add(logPage); logWindow.Show();
+            contentPanel.Controls.Remove(workspaceTabs); workspaceTabs.Dispose(); contentPanel.Controls.Add(pathView);
+            pathView.ActivityChanged += delegate { UpdateState(); };
+            pathView.StatusChanged += delegate { Report(pathView.StatusText, pathView.StatusError); };
+            pathView.SnapshotChanged += delegate
+            {
+                ControllerSnapshot sample = pathView.LatestSnapshot;
+                DisplayPosition(sample.XCounts, sample.YCounts);
+            };
+            globalStop.Click += delegate { StopMonitoredAxes(); };
+            pathView.Pages.Selecting += delegate { StopJog(); CancelDrawing(); };
         }
 
         private void WireEvents()
@@ -154,10 +173,18 @@ namespace Operations_Control
         {
             samplesReady = false; currentSamples = null;
             readouts.Clear(motion.XAxis, motion.YAxis, motion.Motor); canvases.BreakTrace();
+            xPosition.Text = "X —"; yPosition.Text = "Y —";
+        }
+
+        private void DisplayPosition(double x, double y)
+        {
+            xPosition.Text = "X " + (canvases.MappingReady ? (x / canvases.Settings.XCountsPerUnit).ToString("0.000") + " mm" : x.ToString("0.###") + " ct");
+            yPosition.Text = "Y " + (canvases.MappingReady ? (y / canvases.Settings.YCountsPerUnit).ToString("0.000") + " mm" : y.ToString("0.###") + " ct");
         }
 
         private void BeginDrawing(object sender, EventArgs e)
         {
+            if (pathView.IsBusy) return;
             if (!canvases.Follow.Checked) return;
             if (!connected || busy || shuttingDown || joggingMotor.HasValue || !samplesReady ||
                 !canvases.MappingReady || motion.XAxis == motion.YAxis) return;
@@ -181,19 +208,25 @@ namespace Operations_Control
 
         private void UpdateState()
         {
-            connection.ShowState(connected, busy || shuttingDown, connected ? session.DeviceName : String.Empty);
-            motion.SetState(connected && !shuttingDown, busy || follower.Active, joggingMotor.HasValue);
+            bool pathBusy = pathView != null && pathView.IsBusy;
+            connection.ShowState(connected, busy || shuttingDown || pathBusy, connected ? session.DeviceName : String.Empty);
+            motion.SetState(connected && !shuttingDown, busy || follower.Active || pathBusy, joggingMotor.HasValue);
             programs.SetState(connected && !shuttingDown,
-                busy || joggingMotor.HasValue || follower.Active || shuttingDown, !String.IsNullOrEmpty(filePath));
-            editorWindow.Editor.ReadOnly = busy || follower.Active || shuttingDown;
+                busy || joggingMotor.HasValue || follower.Active || shuttingDown || pathBusy, !String.IsNullOrEmpty(filePath));
+            editorWindow.Editor.ReadOnly = busy || follower.Active || shuttingDown || pathBusy;
             canvases.SetState(connected && !shuttingDown && samplesReady && motion.XAxis != motion.YAxis,
-                busy || joggingMotor.HasValue || shuttingDown, follower.Active);
-            modeHint.Text = connection.IsSimulation ? "模拟模式" : "PMAC 实机";
+                busy || joggingMotor.HasValue || shuttingDown || pathBusy, follower.Active);
+            globalStop.Enabled = connected && !shuttingDown;
+            if (pathView != null)
+            {
+                pathView.UpdateContext(connection.IsSimulation, canvases.Settings, canvases.MappingReady, motion.XAxis, motion.YAxis);
+                pathView.SetExternalState(busy || joggingMotor.HasValue || shuttingDown || follower.Active, follower.Active);
+            }
         }
 
         private void Run(string message, Action action, Action success)
         {
-            if (busy || shuttingDown || follower.Active) return;
+            if (busy || shuttingDown || follower.Active || pathView.IsBusy) return;
             busy = true; feedback.Text = message; feedback.ForeColor = UiTheme.Muted; UpdateState();
             session.Execute(this, action, delegate(Exception error)
             {
@@ -212,7 +245,7 @@ namespace Operations_Control
 
         private void StartJog(object sender, JogRequestEventArgs e)
         {
-            if (!connected || busy || shuttingDown || joggingMotor.HasValue || follower.Active) return;
+            if (!connected || busy || shuttingDown || joggingMotor.HasValue || follower.Active || pathView.IsBusy) return;
             decimal speed = motion.Speed.Value;
             decimal? step = motion.SingleStep.Checked ? (decimal?)motion.Step.Value : null;
             if (!step.HasValue) joggingMotor = e.Motor;
@@ -244,6 +277,13 @@ namespace Operations_Control
 
         private void StopMonitoredAxes()
         {
+            if (pathView.IsExecuting)
+            {
+                pathView.StopExecution();
+                if (motion.Motor != motion.XAxis && motion.Motor != motion.YAxis)
+                    session.Execute(this, delegate { session.Stop(new int[] { motion.Motor }); }, delegate(Exception error) { if (error != null) Report(error.Message, true); });
+                return;
+            }
             if (!connected || shuttingDown) return;
             CancelDrawing();
             int[] motors = MonitoredAxes(); joggingMotor = null;
@@ -257,18 +297,18 @@ namespace Operations_Control
 
         private void RefreshData(object sender, EventArgs e)
         {
-            dateText.Text = DateTime.Now.ToString("yyyy-MM-dd"); timeText.Text = DateTime.Now.ToString("HH:mm:ss");
-            if (!connected || busy || pollPending || shuttingDown) return;
+            if (!connected || busy || pollPending || shuttingDown || pathView.IsExecuting) return;
             int[] motors = new int[] { motion.XAxis, motion.YAxis, motion.Motor };
             AxisSample[] samples = null; pollPending = true;
             session.Execute(this, delegate { samples = session.ReadAxes(motors); }, delegate(Exception error)
             {
-                pollPending = false; if (!connected || shuttingDown) return;
+                pollPending = false; if (!connected || shuttingDown || pathView.IsExecuting) return;
                 if (error != null) { Report("位置刷新失败：" + error.Message, true); ResetSamples(); Disconnect(false); }
                 else if (motors[0] == motion.XAxis && motors[1] == motion.YAxis && motors[2] == motion.Motor)
                 {
                     samplesReady = true; currentSamples = samples; readouts.Display(samples);
                     canvases.Display(samples[0].Position, samples[1].Position);
+                    DisplayPosition(samples[0].Position, samples[1].Position);
                     if (follower.Active && !canvases.Settings.Contains(canvases.Settings.FromCounts(samples[0].Position, samples[1].Position)))
                     {
                         CancelDrawing(); canvases.Follow.Checked = false; Report("反馈位置超出已设置范围，跟随已停止。", true);
@@ -371,8 +411,13 @@ namespace Operations_Control
         private void CloseForm(object sender, FormClosingEventArgs e)
         {
             if (closeReady) return;
+            if (pathView.IsExecuting)
+            {
+                e.Cancel = true; pathView.StopExecution(delegate(Exception error)
+                { if (error == null) Close(); else Report("停止失败：" + error.Message, true); }); return;
+            }
             e.Cancel = true; if (shuttingDown) return;
-            StopJog(); CancelDrawing(); if (!ConfirmDiscard()) return; Disconnect(true);
+            StopJog(); CancelDrawing(); if (!ConfirmDiscard()) return; pathView.CancelPendingWork(); Disconnect(true);
         }
     }
 }
