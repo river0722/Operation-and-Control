@@ -1,34 +1,30 @@
-# Operation and Control
+# 学习与课程资料
 
-PMAC 运动控制学习资料与 C# WinForms 上位机项目。上位机使用 .NET Framework 3.5、x86，支持模拟模式与 PcommServer 实机通信，提供电机位置反馈、点动、定位、程序下载和双轴绘图跟随。
+本目录汇总 PMAC 学习路线、课程任务和答辩资料。项目介绍、编译与模拟演示见 [仓库 README](../README.md)，上位机操作见 [项目说明](../online/README.md)。
 
-![上位机双画布界面](online/screenshots/dual-canvases.png)
+## 学习路线
 
-## 目录
-
-| 路径 | 内容 |
+| 文档 | 内容 |
 | --- | --- |
-| [online](online/) | 上位机源码、编译脚本、界面截图与设计说明 |
-| [pmac资料](pmac资料/) | PMAC 用户手册、编程手册、通信教程、培训资料及伺服驱动资料 |
-| [PMAC零基础最快学习路线.md](PMAC零基础最快学习路线.md) | PMAC 入门学习路线 |
-| [PMAC上位机学习路线.md](PMAC上位机学习路线.md) | C# 上位机学习路线 |
-| [tmp](tmp/) | 学习过程中提取的参考文本、图片和参考代码 |
+| [PMAC 零基础最快学习路线](PMAC零基础最快学习路线.md) | 控制系统入门、PMAC 通信和运动控制学习顺序 |
+| [PMAC 上位机学习路线](PMAC上位机学习路线.md) | C#、WinForms、PcommServer 和上位机控制学习顺序 |
+| [PMAC 参考资料](../pmac资料/) | 用户手册、编程手册、硬件手册、通信教程和培训资料 |
 
-## 编译与运行
+## 课程与答辩
 
-在 Windows 上安装 .NET Framework 3.5，并准备 Visual Studio 的 .NET 桌面开发工具。在仓库根目录执行：
+| 文件 | 内容 |
+| --- | --- |
+| [第三组分工表](第三组分工表.xlsx) | 原始课程任务与小组分工 |
+| [第三组分工表：上位机完成情况](第三组分工表_上位机完成情况.xlsx) | 标注上位机软件、模拟成果及待验收事项的副本 |
+| [运行与控制实施计划](<运行与控制 - 1批-实施计划.pdf>) | 课程实施计划与阶段评分量规 |
+| [第一周答辩：剩余问题与参考答案](第一周答辩_剩余问题与参考答案.md) | 第一周评分点、主问题、追问与参考回答 |
+| [第一周答辩 PDF](../output/pdf/第一周答辩_剩余问题与参考答案.pdf) | 便于阅读与打印的答辩资料 |
+| [上位机实现计划](superpowers/plans/2026-10-13-pmac-course-completion.md) | 软件实现任务与检查清单 |
 
-```powershell
-cd online
-.\build.ps1
-```
+## 上位机说明
 
-生成的程序位于 `online/Operations Control/bin/Release/Operations Control.exe`。默认使用模拟模式，点击“连接设备”即可体验。实机通信需要安装并配置 32 位 PcommServer / PMAC 驱动。
-
-也可在 Visual Studio 中打开 `online/Operations Control/Operations Control.csproj`。操作方法、坐标配置、模拟检查及模块说明见 [上位机项目说明](online/README.md)，代码结构与后续视觉检测设计见 [设计说明](online/docs/代码结构与视觉检测多线程设计说明.md)。
-
-## 参考与许可
-
-上位机的界面参考 [lin-tea/PMAC_CSharp](https://github.com/lin-tea/PMAC_CSharp)，具体参考版本见上位机项目说明。
-
-项目保留仓库的 [MIT LICENSE](LICENSE)。收录的第三方手册、安装包及参考素材，其权利归各自原作者所有。
+- [工艺工作台使用与验收](../online/docs/工艺工作台使用与验收.md)：绘图、规划、运行、分析及实机验收步骤。
+- [上位机任务完成情况](../online/docs/上位机任务完成情况.md)：对照分工表的完成记录与验证结果。
+- [代码功能说明](../online/docs/代码功能说明.md)：主窗口、页面、模型、通信、规划与分析模块。
+- [软件开发问题与解决记录](../online/docs/软件开发问题与解决记录.md)：开发问题、处理方法与验证依据。
+- [代码结构与视觉检测多线程设计说明](../online/docs/代码结构与视觉检测多线程设计说明.md)：代码结构及后续视觉检测的设计资料。
