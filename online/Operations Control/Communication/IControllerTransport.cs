@@ -1,7 +1,7 @@
 using System;
 using Operations_Control.Models;
 
-namespace Operations_Control.Services
+namespace Operations_Control.Communication
 {
     public interface IControllerTransport : IDisposable
     {
@@ -12,4 +12,10 @@ namespace Operations_Control.Services
         CommandResult Send(string command);
         void Download(string filePath);
     }
+    // Optional simulator capability; the session does not depend on a concrete simulator.
+    public interface IPlannedTransport
+    {
+        void StartPlan(MotionPlan plan, double lagMs);
+    }
+
 }

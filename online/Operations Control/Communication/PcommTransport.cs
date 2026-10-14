@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using Operations_Control.Models;
 
-namespace Operations_Control.Services
+namespace Operations_Control.Communication
 {
     // Late binding keeps simulation/build independent of an installed COM interop assembly.
     // This object is created, used and released exclusively on ControllerSession's STA thread.

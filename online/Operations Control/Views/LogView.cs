@@ -1,5 +1,5 @@
 ﻿using System;
-using System.IO;
+using Operations_Control.Files;
 using System.Text;
 using System.Windows.Forms;
 
@@ -16,7 +16,7 @@ namespace Operations_Control.Views
         {
             logSaveDialog.FileName = "PMAC-log-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".txt";
             if (logSaveDialog.ShowDialog(FindForm()) != DialogResult.OK) return;
-            try { File.WriteAllText(logSaveDialog.FileName, entries.Text, Encoding.UTF8); Append("信息", "日志已导出。"); }
+            try { ProgramFileStore.Save(logSaveDialog.FileName, entries.Text, Encoding.UTF8); Append("信息", "日志已导出。"); }
             catch (Exception error) { Append("错误", "导出失败：" + error.Message); }
         }
 

@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text;
 using Operations_Control.Models;
 
-namespace Operations_Control.Services
+namespace Operations_Control.Communication
 {
     public static class PmacProgramWriter
     {

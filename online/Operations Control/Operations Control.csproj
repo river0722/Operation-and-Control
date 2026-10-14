@@ -44,6 +44,17 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Application\OperationState.cs" />
+    <Compile Include="Application\ManualMotionService.cs" />
+    <Compile Include="Application\FeedbackService.cs" />
+    <Compile Include="Application\MotionWorkflow.cs" />
+    <Compile Include="Application\MotionPlanningService.cs" />
+    <Compile Include="Communication\IControllerSession.cs" />
+    <Compile Include="Communication\StaCommandDispatcher.cs" />
+    <Compile Include="Files\ProgramFileStore.cs" />
+    <Compile Include="Files\RunDataExporter.cs" />
+    <Compile Include="Models\ControllerFeedback.cs" />
+    <Compile Include="Controls\CanvasProjection.cs" />
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -58,17 +69,17 @@
     <Compile Include="Models\ControllerModels.cs" />
     <Compile Include="Models\PathModels.cs" />
     <Compile Include="Models\DeviceStatus.cs" />
-    <Compile Include="Services\PathGeometry.cs" />
-    <Compile Include="Services\DxfReader.cs" />
-    <Compile Include="Services\TrajectoryPlanner.cs" />
-    <Compile Include="Services\PmacProgramWriter.cs" />
-    <Compile Include="Services\TrajectoryAnalysis.cs" />
+    <Compile Include="Motion\PathGeometry.cs" />
+    <Compile Include="Files\DxfReader.cs" />
+    <Compile Include="Motion\TrajectoryPlanner.cs" />
+    <Compile Include="Communication\PmacProgramWriter.cs" />
+    <Compile Include="Motion\TrajectoryAnalysis.cs" />
     <Compile Include="Views\PathView.cs"><SubType>UserControl</SubType></Compile>
     <Compile Include="Views\PathView.Designer.cs"><DependentUpon>PathView.cs</DependentUpon></Compile>
-    <Compile Include="Services\IControllerTransport.cs" />
-    <Compile Include="Services\SimulatorTransport.cs" />
-    <Compile Include="Services\PcommTransport.cs" />
-    <Compile Include="Services\ControllerSession.cs" />
+    <Compile Include="Communication\IControllerTransport.cs" />
+    <Compile Include="Communication\SimulatorTransport.cs" />
+    <Compile Include="Communication\PcommTransport.cs" />
+    <Compile Include="Communication\ControllerSession.cs" />
     <Compile Include="Views\ConnectionView.cs">
       <SubType>UserControl</SubType>
     </Compile>
@@ -108,7 +119,7 @@
     <Compile Include="Controls\MotionCanvas.cs"><SubType>Component</SubType></Compile>
     <Compile Include="Models\CanvasModels.cs" />
     <Compile Include="Models\JogRequestEventArgs.cs" />
-    <Compile Include="Services\CanvasFollower.cs" />
+    <Compile Include="Application\CanvasFollower.cs" />
     <Compile Include="Views\ConnectionView.Designer.cs"><DependentUpon>ConnectionView.cs</DependentUpon></Compile>
     <Compile Include="Views\MotionView.Designer.cs"><DependentUpon>MotionView.cs</DependentUpon></Compile>
     <Compile Include="Views\ProgramView.Designer.cs"><DependentUpon>ProgramView.cs</DependentUpon></Compile>

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Operations_Control.Models;
 
-namespace Operations_Control.Services
+namespace Operations_Control.Motion
 {
     public static class PathGeometry
     {

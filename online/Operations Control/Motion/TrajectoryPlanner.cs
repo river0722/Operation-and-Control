@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Operations_Control.Models;
 
-namespace Operations_Control.Services
+namespace Operations_Control.Motion
 {
     public static class TrajectoryPlanner
     {
@@ -25,7 +25,7 @@ namespace Operations_Control.Services
                 AddBlock(plan, block); previous = points[points.Count - 1];
             }
             if (plan.DurationMs > 3600000) throw new ArgumentException("运行时间超过一小时，请拆分任务。");
-            plan.Program = PmacProgramWriter.Write(plan); return plan;
+            return plan;
         }
         private static PlanningOptions CopyOptions(PlanningOptions o)
         {

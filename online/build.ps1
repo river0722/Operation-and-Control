@@ -46,4 +46,10 @@ if ($Test) {
     if ($LASTEXITCODE -ne 0) { throw 'Workflow test compilation failed.' }
     & $featureRunner $ScreenshotDirectory
     if ($LASTEXITCODE -ne 0) { throw 'Workflow tests failed.' }
+    $moduleRunner = Join-Path $output 'OperationsControl.ModuleTests.exe'
+    $moduleSource = Join-Path $projectRoot 'Tests\ModuleTests.cs'
+    & $compiler /nologo /target:exe /platform:x86 "/out:$moduleRunner" "/reference:$application" /reference:System.Core.dll $moduleSource
+    if ($LASTEXITCODE -ne 0) { throw 'Module test compilation failed.' }
+    & $moduleRunner
+    if ($LASTEXITCODE -ne 0) { throw 'Module tests failed.' }
 }

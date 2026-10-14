@@ -1,3 +1,5 @@
+using Operations_Control.Files;
+using Operations_Control.Motion;
 using System;
 using System.Diagnostics;
 using System.Globalization;
@@ -5,10 +7,10 @@ using System.IO;
 using System.Text.RegularExpressions;
 using Operations_Control.Models;
 
-namespace Operations_Control.Services
+namespace Operations_Control.Communication
 {
     // In-memory axes only. No PMAC driver or physical device is touched.
-    public sealed class SimulatorTransport : IControllerTransport
+    public sealed class SimulatorTransport : IControllerTransport, IPlannedTransport
     {
         private sealed class Axis
         {

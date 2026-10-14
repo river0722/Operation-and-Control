@@ -1,3 +1,4 @@
+using Application = System.Windows.Forms.Application;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -9,7 +10,10 @@ using System.Threading;
 using System.Windows.Forms;
 using Operations_Control;
 using Operations_Control.Models;
-using Operations_Control.Services;
+using Operations_Control.Communication;
+using Operations_Control.Motion;
+using Operations_Control.Files;
+using Operations_Control.Application;
 using Operations_Control.Views;
 
 internal static class WorkflowTests
@@ -25,7 +29,7 @@ internal static class WorkflowTests
     private static void Call(ControllerSession session, Control owner, Action action)
     {
         bool done = false; Exception failure = null;
-        session.Execute(owner, action, delegate(Exception error) { failure = error; done = true; });
+        session.Execute(action, delegate(Exception error) { failure = error; done = true; });
         Until(delegate { return done; }, 5000, "Controller operation completes"); if (failure != null) throw failure;
     }
     private static void SaveImage(Form form, string directory, string name)
@@ -63,13 +67,13 @@ internal static class WorkflowTests
         DrawingPath example = DxfReader.Read(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\..\..\examples\course-shapes.dxf"), 0.01, 1);
         Check(example.Strokes.Count == 5, "Delivered DXF imports all five entities");
         foreach (InterpolationMode mode in new InterpolationMode[] { InterpolationMode.PVT, InterpolationMode.Spline })
-            Check(TrajectoryPlanner.Build(example, new PlanningOptions { Mode = mode }, new MotionPoint(0, 0)).DurationMs > 0, "Delivered DXF plans in " + mode);
+            Check(MotionPlanningService.Build(example, new PlanningOptions { Mode = mode }, new MotionPoint(0, 0)).DurationMs > 0, "Delivered DXF plans in " + mode);
     }
     private static MotionPlan MakePlan(InterpolationMode mode)
     {
         PlanningOptions options = new PlanningOptions { Mode = mode, Speed = 8, Acceleration = 40, Spacing = 0.5 };
         DrawingPath path = PathGeometry.Arc(0, 0, 3, 0, 270, 0.01); path.Strokes.Add(PathGeometry.Line(-2, -2, 2, 2).Strokes[0]);
-        return TrajectoryPlanner.Build(path, options, new MotionPoint(0, 0));
+        return MotionPlanningService.Build(path, options, new MotionPoint(0, 0));
     }
     private static void Planning()
     {
@@ -99,14 +103,14 @@ internal static class WorkflowTests
             Check(maxSpeed <= plan.Options.Speed + 1e-6 && maxAcceleration <= plan.Options.Acceleration + 1e-6, "Velocity and acceleration bounds");
             Near(boundary, plan.DurationMs, 1e-6, "Durations total");
         }
-        Reject(delegate { TrajectoryPlanner.Build(PathGeometry.Line(0, 0, 11, 0), new PlanningOptions(), new MotionPoint(0, 0)); }, "Out-of-travel path rejected");
+        Reject(delegate { MotionPlanningService.Build(PathGeometry.Line(0, 0, 11, 0), new PlanningOptions(), new MotionPoint(0, 0)); }, "Out-of-travel path rejected");
         PlanningOptions invalid = new PlanningOptions { XMotor = 2, YMotor = 2 };
-        Reject(delegate { TrajectoryPlanner.Build(PathGeometry.Line(0, 0, 1, 0), invalid, new MotionPoint(0, 0)); }, "Duplicate motor mapping rejected");
+        Reject(delegate { MotionPlanningService.Build(PathGeometry.Line(0, 0, 1, 0), invalid, new MotionPoint(0, 0)); }, "Duplicate motor mapping rejected");
         // Independent constants from Turbo PMAC SRM 5-153, including the 9/10 bank boundary.
         int[] systems = { 1, 8, 9, 10, 16 }, variables = { 5190, 5890, 5990, 6090, 6690 };
         for (int i = 0; i < systems.Length; i++)
         {
-            MotionPlan cs = TrajectoryPlanner.Build(PathGeometry.Line(0, 0, 1, 0), new PlanningOptions { CoordinateSystem = systems[i] }, new MotionPoint(0, 0));
+            MotionPlan cs = MotionPlanningService.Build(PathGeometry.Line(0, 0, 1, 0), new PlanningOptions { CoordinateSystem = systems[i] }, new MotionPoint(0, 0));
             Check(cs.Program.Contains("I" + variables[i] + "=1000"), "Turbo coordinate-system feed units " + systems[i]);
         }
     }
@@ -118,19 +122,19 @@ internal static class WorkflowTests
         AnalysisResult result = TrajectoryAnalysis.Analyze(delayed);
         Check(result.EstimatedLagMs.HasValue, "Moving trace supports lag estimate"); Near(result.EstimatedLagMs.Value, 80, 10, "Known 80 ms lag recovered");
         Check(result.TrackingRms > 0.01 && result.QueryMean == 2, "Temporal error includes lag");
-        MotionPlan straight = TrajectoryPlanner.Build(PathGeometry.Line(0, 0, 5, 0), new PlanningOptions(), new MotionPoint(0, 0));
+        MotionPlan straight = MotionPlanningService.Build(PathGeometry.Line(0, 0, 5, 0), new PlanningOptions(), new MotionPoint(0, 0));
         TrajectoryRun shifted = new TrajectoryRun { Plan = straight, Simulation = true, Result = "停止", StartedUtc = DateTime.UtcNow };
         for (double t = 0; t <= straight.DurationMs; t += 10) { MotionPoint p = straight.At(t); p.Y += 0.2; shifted.Samples.Add(new TrajectorySample(t, t, t, 1, p)); }
         AnalysisResult offset = TrajectoryAnalysis.Analyze(shifted);
         Near(offset.ContourRms, 0.2, 1e-8, "Known normal contour offset"); Near(offset.TrackingRms, 0.2, 1e-8, "Known temporal error");
         Check(offset.Text.Contains("未完整运行"), "Incomplete run is labeled");
-        string exported = TrajectoryAnalysis.Export(delayed, output);
+        string exported = RunDataExporter.Export(delayed, output);
         Check(File.ReadAllLines(Path.Combine(exported, "actual.csv")).Length == delayed.Samples.Count + 1, "Full feedback exported");
         Check(File.Exists(Path.Combine(exported, "drawing.csv")) && File.Exists(Path.Combine(exported, "planned.csv")), "Input and reference exported");
         Reject(delegate { TrajectoryAnalysis.Analyze(new TrajectoryRun { Plan = straight }); }, "Empty samples cannot claim zero error");
         TrajectoryRun longRun = new TrajectoryRun { Plan = straight, Simulation = true, Result = "测试数据", StartedUtc = DateTime.UtcNow };
         for (int i = 0; i < 4101; i++) { double t = i * straight.DurationMs / 4100; longRun.Samples.Add(new TrajectorySample(t, t, t, 1, straight.At(t))); }
-        Check(File.ReadAllLines(Path.Combine(TrajectoryAnalysis.Export(longRun, output), "actual.csv")).Length == 4102, "Analysis retains samples beyond canvas history limit");
+        Check(File.ReadAllLines(Path.Combine(RunDataExporter.Export(longRun, output), "actual.csv")).Length == 4102, "Analysis retains samples beyond canvas history limit");
     }
     private static void Simulator()
     {
@@ -144,7 +148,7 @@ internal static class WorkflowTests
             sim.Send("#1K"); Check(!MotorStatus.Parse(sim.Send("#1?").Response).Enabled, "Kill disables amplifier");
             Reject(delegate { sim.Send("#1J=100"); }, "Killed axis rejects queued movement");
             sim.Send("#1J/"); Check(MotorStatus.Parse(sim.Send("#1?").Response).Enabled, "J/ closes loop");
-            MotionPlan plan = TrajectoryPlanner.Build(PathGeometry.Line(0, 0, 1, 2), new PlanningOptions { Speed = 100, Acceleration = 1000 }, new MotionPoint(0, 0));
+            MotionPlan plan = MotionPlanningService.Build(PathGeometry.Line(0, 0, 1, 2), new PlanningOptions { Speed = 100, Acceleration = 1000 }, new MotionPoint(0, 0));
             sim.StartPlan(plan, 0); Thread.Sleep(50);
             double x = Double.Parse(sim.Send("#1P").Response, CultureInfo.InvariantCulture), y = Double.Parse(sim.Send("#2P").Response, CultureInfo.InvariantCulture);
             Near(y, 2 * x, 5, "Both axes share path time");
@@ -210,7 +214,7 @@ internal static class WorkflowTests
                 Field<ComboBox>(form, "interpolation").SelectedIndex = 1;
                 form.GeneratePlan(); Until(delegate { return form.CurrentPlan != null; }, 5000, "Imported DXF spline plans");
                 form.StartExecution(); Until(delegate { return form.CurrentRun != null && form.CurrentRun.Completed; }, 20000, "Imported DXF spline completes through GUI");
-                string demo = TrajectoryAnalysis.Export(form.CurrentRun, output);
+                string demo = RunDataExporter.Export(form.CurrentRun, output);
                 Check(File.ReadAllText(Path.Combine(demo, "program.pmc")).Contains("SPLINE1"), "GUI export retains executed spline program");
                 Field<TabControl>(form, "tabs").SelectedIndex = 0; SaveImage(main, output, "workflow-dxf-spline.png");
                 form.StartHoming(); Until(delegate { return !form.IsExecuting && Field<Label>(form, "feedbackLabel").Text.Contains("机械回零完成"); }, 5000, "Repeated home requires new transition");

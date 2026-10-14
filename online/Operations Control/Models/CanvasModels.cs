@@ -1,5 +1,4 @@
 using System;
-using System.Drawing;
 
 namespace Operations_Control.Models
 {
@@ -38,26 +37,6 @@ namespace Operations_Control.Models
         }
         public MotionPoint FromCounts(double x, double y) { return new MotionPoint(x / XCountsPerUnit, y / YCountsPerUnit); }
 
-        // Preserve the physical aspect ratio and use an upward-positive Y axis.
-        public RectangleF PlotArea(Rectangle bounds)
-        {
-            float availableWidth = Math.Max(1, bounds.Width - 112);
-            float availableHeight = Math.Max(1, bounds.Height - 60);
-            double scale = Math.Min(availableWidth / (XMax - XMin), availableHeight / (YMax - YMin));
-            float width = (float)((XMax - XMin) * scale), height = (float)((YMax - YMin) * scale);
-            return new RectangleF(bounds.Left + 50 + (availableWidth - width) / 2,
-                bounds.Top + 28 + (availableHeight - height) / 2, width, height);
-        }
-        public PointF ToScreen(MotionPoint point, RectangleF plot)
-        {
-            return new PointF(plot.Left + (float)((point.X - XMin) / (XMax - XMin)) * plot.Width,
-                plot.Bottom - (float)((point.Y - YMin) / (YMax - YMin)) * plot.Height);
-        }
-        public MotionPoint FromScreen(Point point, RectangleF plot)
-        {
-            return new MotionPoint(XMin + (point.X - plot.Left) / plot.Width * (XMax - XMin),
-                YMin + (plot.Bottom - point.Y) / plot.Height * (YMax - YMin));
-        }
     }
 
     public sealed class DrawPointEventArgs : EventArgs

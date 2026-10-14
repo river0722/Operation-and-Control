@@ -1,18 +1,19 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
-using System.IO;
 using System.Text;
 using System.Windows.Forms;
 using Operations_Control.Controls;
 using Operations_Control.Models;
-using Operations_Control.Services;
+using Operations_Control.Communication;
+using Operations_Control.Files;
+using Operations_Control.Application;
 using Operations_Control.Views;
 
 namespace Operations_Control
 {
-    // Coordinates views. PMAC protocol and transport are contained in Services.
+    // Composes views and application services; device access stays in Communication.
     public partial class Form1 : Form
     {
         private ControllerSession session;
@@ -22,8 +23,13 @@ namespace Operations_Control
         private LogView log;
         private AxisSample[] currentSamples;
         private bool samplesReady;
-        private bool connected, busy, pollPending, shuttingDown, closeReady;
-        private int? joggingMotor;
+        private bool connected, closeReady;
+        private OperationState operations;
+        private ManualMotionService manual;
+        private FeedbackService feedbackService;
+        private bool busy { get { return operations.ManualBusy; } }
+        private bool shuttingDown { get { return operations.ShuttingDown; } }
+        private int? joggingMotor { get { return operations.JoggingMotor; } set { operations.JoggingMotor = value; } }
         private string filePath;
         private string savedText = String.Empty;
         private Encoding fileEncoding = new UTF8Encoding(false);
@@ -36,14 +42,24 @@ namespace Operations_Control
             if (LicenseManager.UsageMode == LicenseUsageMode.Designtime) return;
             Rectangle workspace = Screen.FromControl(this).WorkingArea;
             Size = new Size(Math.Min(Width, workspace.Width - 24), Math.Min(Height, workspace.Height - 24));
-            session = new ControllerSession();
-            follower = new CanvasFollower(session, this);
+            operations = new OperationState();
+            session = new ControllerSession(new WindowsFormsSynchronizationContext());
+            manual = new ManualMotionService(session, operations);
+            feedbackService = new FeedbackService(session);
+            follower = new CanvasFollower(session);
             editorWindow = new ProgramEditorForm(); logWindow = new LogForm(); log = logWindow.Log;
             editorWindow.Icon = Icon; logWindow.Icon = Icon;
             components.Add(editorWindow); components.Add(logWindow);
             canvases.ConfigureMode(connection.IsSimulation);
             IntegrateViews();
             WireEvents();
+            manual.StateChanged += delegate { if (!IsDisposed) UpdateState(); };
+            feedbackService.Updated += delegate { RefreshData(null, EventArgs.Empty); };
+            feedbackService.Failed += delegate(Exception error)
+            {
+                if (IsDisposed || shuttingDown || pathView.IsExecuting) return;
+                Report("位置刷新失败：" + error.Message, true); ResetSamples(); Disconnect(false);
+            };
             readouts.Clear(motion.XAxis, motion.YAxis, motion.Motor);
             refreshTimer.Start();
             drawTimer.Start();
@@ -56,7 +72,7 @@ namespace Operations_Control
         private void IntegrateViews()
         {
             pathView = new PathView(session, connection.IsSimulation, canvases.Settings, canvases.MappingReady,
-                motion.XAxis, motion.YAxis, canvases) { Dock = DockStyle.Fill };
+                motion.XAxis, motion.YAxis, canvases, operations, feedbackService) { Dock = DockStyle.Fill };
             pathView.AddCoordinateSettings(canvases);
             workspaceTabs.TabPages.Remove(manualPage);
             // Rebuild page order before handles exist; Framework 3.5 Insert can lose a native tab.
@@ -99,7 +115,7 @@ namespace Operations_Control
                 Run("正在连接设备…", delegate { opened = session.Connect(simulation, owner); }, delegate
                 {
                     connected = opened;
-                    samplesReady = false; currentSamples = null; canvases.BreakTrace();
+                    feedbackService.Clear(); samplesReady = false; currentSamples = null; canvases.BreakTrace();
                     Report(opened ? "已连接 " + session.DeviceName : "已取消设备选择。", false);
                     UpdateState(); if (connected) RefreshData(null, EventArgs.Empty);
                 });
@@ -123,7 +139,7 @@ namespace Operations_Control
                 if (MessageBox.Show(this, "将电机 " + motor + " 的当前位置设为零点（HOMEZ）？",
                     "当前位置置零", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
                 Run("正在设置当前位置零点…",
-                    delegate { session.Send("#" + motor + "HOMEZ"); session.ClearSamples(); },
+                    delegate { session.ZeroPosition(motor); },
                     delegate { ResetSamples(); Report("电机 " + motor + " 当前位置置零命令已接受。", false); });
             };
             motion.ApplySpeedButton.Click += delegate
@@ -166,12 +182,12 @@ namespace Operations_Control
             {
                 if (e.KeyCode == Keys.Escape) { StopMonitoredAxes(); e.SuppressKeyPress = true; }
             };
-            FormClosed += delegate { refreshTimer.Stop(); drawTimer.Stop(); session.Dispose(); };
+            FormClosed += delegate { refreshTimer.Stop(); drawTimer.Stop(); feedbackService.Dispose(); session.Dispose(); };
         }
 
         private void ResetSamples()
         {
-            samplesReady = false; currentSamples = null;
+            feedbackService.Clear(); samplesReady = false; currentSamples = null;
             readouts.Clear(motion.XAxis, motion.YAxis, motion.Motor); canvases.BreakTrace();
             xPosition.Text = "X —"; yPosition.Text = "Y —";
         }
@@ -208,6 +224,7 @@ namespace Operations_Control
 
         private void UpdateState()
         {
+            operations.Following = follower.Active;
             bool pathBusy = pathView != null && pathView.IsBusy;
             connection.ShowState(connected, busy || shuttingDown || pathBusy, connected ? session.DeviceName : String.Empty);
             motion.SetState(connected && !shuttingDown, busy || follower.Active || pathBusy, joggingMotor.HasValue);
@@ -219,18 +236,18 @@ namespace Operations_Control
             globalStop.Enabled = connected && !shuttingDown;
             if (pathView != null)
             {
-                pathView.UpdateContext(connection.IsSimulation, canvases.Settings, canvases.MappingReady, motion.XAxis, motion.YAxis);
-                pathView.SetExternalState(busy || joggingMotor.HasValue || shuttingDown || follower.Active, follower.Active);
+                pathView.UpdateContext(connection.IsSimulation, canvases.Settings, canvases.MappingReady, motion.XAxis, motion.YAxis, motion.Motor);
+                pathView.RefreshState();
             }
         }
 
         private void Run(string message, Action action, Action success)
         {
             if (busy || shuttingDown || follower.Active || pathView.IsBusy) return;
-            busy = true; feedback.Text = message; feedback.ForeColor = UiTheme.Muted; UpdateState();
-            session.Execute(this, action, delegate(Exception error)
+            feedback.Text = message; feedback.ForeColor = UiTheme.Muted;
+            manual.Execute(action, delegate(Exception error)
             {
-                busy = false;
+                if (IsDisposed) return;
                 if (error != null) Report(error.Message, true);
                 else if (success != null) success();
                 UpdateState();
@@ -245,27 +262,23 @@ namespace Operations_Control
 
         private void StartJog(object sender, JogRequestEventArgs e)
         {
-            if (!connected || busy || shuttingDown || joggingMotor.HasValue || follower.Active || pathView.IsBusy) return;
-            decimal speed = motion.Speed.Value;
             decimal? step = motion.SingleStep.Checked ? (decimal?)motion.Step.Value : null;
-            if (!step.HasValue) joggingMotor = e.Motor;
-            Run("正在发送点动命令…", delegate { session.Jog(e.Motor, e.Direction, speed, step); }, delegate
+            manual.StartJog(e.Motor, e.Direction, motion.Speed.Value, step, delegate(Exception error)
             {
-                Report("电机 " + e.Motor + (step.HasValue ? " 单步点动命令已接受。" : " 连续点动命令已接受。"), false);
+                if (IsDisposed) return;
+                if (error != null) Report(error.Message, true);
+                else Report("电机 " + e.Motor + (step.HasValue ? " 单步点动命令已接受。" : " 连续点动命令已接受。"), false);
             });
         }
 
         private void StopJog()
         {
-            if (!joggingMotor.HasValue) return;
-            int motor = joggingMotor.Value; joggingMotor = null;
-            // Always queue release, even when start is pending. Same STA preserves order.
-            session.Execute(this, delegate { session.Stop(new int[] { motor }); }, delegate(Exception error)
+            manual.StopJog(delegate(int motor, Exception error)
             {
+                if (IsDisposed) return;
                 Report(error == null ? "电机 " + motor + " 停止命令已接受。" : "停止失败：" + error.Message, error != null);
                 UpdateState();
             });
-            UpdateState();
         }
 
         private int[] MonitoredAxes()
@@ -281,13 +294,13 @@ namespace Operations_Control
             {
                 pathView.StopExecution();
                 if (motion.Motor != motion.XAxis && motion.Motor != motion.YAxis)
-                    session.Execute(this, delegate { session.Stop(new int[] { motion.Motor }); }, delegate(Exception error) { if (error != null) Report(error.Message, true); });
+                    session.Execute(delegate { session.Stop(new int[] { motion.Motor }); }, delegate(Exception error) { if (error != null) Report(error.Message, true); });
                 return;
             }
             if (!connected || shuttingDown) return;
             CancelDrawing();
             int[] motors = MonitoredAxes(); joggingMotor = null;
-            session.Execute(this, delegate { session.Stop(motors); }, delegate(Exception error)
+            session.Execute(delegate { session.Stop(motors); }, delegate(Exception error)
             {
                 Report(error == null ? "X / Y 和所选电机停止命令已接受。" : "停止失败：" + error.Message, error != null);
                 UpdateState();
@@ -297,42 +310,29 @@ namespace Operations_Control
 
         private void RefreshData(object sender, EventArgs e)
         {
-            if (!connected || busy || pollPending || shuttingDown || pathView.IsExecuting) return;
-            int[] motors = new int[] { motion.XAxis, motion.YAxis, motion.Motor };
-            AxisSample[] samples = null; pollPending = true;
-            session.Execute(this, delegate { samples = session.ReadAxes(motors); }, delegate(Exception error)
+            if (IsDisposed || !connected || shuttingDown || feedbackService.Latest == null) return;
+            AxisSample[] samples = feedbackService.Latest.Axes;
+            if (samples[0].Motor != motion.XAxis || samples[1].Motor != motion.YAxis || samples[2].Motor != motion.Motor) return;
+            samplesReady = true; currentSamples = samples; readouts.Display(samples);
+            if (!pathView.IsExecuting) canvases.Display(samples[0].Position, samples[1].Position);
+            DisplayPosition(samples[0].Position, samples[1].Position);
+            if (follower.Active && !canvases.Settings.Contains(canvases.Settings.FromCounts(samples[0].Position, samples[1].Position)))
             {
-                pollPending = false; if (!connected || shuttingDown || pathView.IsExecuting) return;
-                if (error != null) { Report("位置刷新失败：" + error.Message, true); ResetSamples(); Disconnect(false); }
-                else if (motors[0] == motion.XAxis && motors[1] == motion.YAxis && motors[2] == motion.Motor)
-                {
-                    samplesReady = true; currentSamples = samples; readouts.Display(samples);
-                    canvases.Display(samples[0].Position, samples[1].Position);
-                    DisplayPosition(samples[0].Position, samples[1].Position);
-                    if (follower.Active && !canvases.Settings.Contains(canvases.Settings.FromCounts(samples[0].Position, samples[1].Position)))
-                    {
-                        CancelDrawing(); canvases.Follow.Checked = false; Report("反馈位置超出已设置范围，跟随已停止。", true);
-                    }
-                    UpdateState();
-                }
-            });
+                CancelDrawing(); canvases.Follow.Checked = false; Report("反馈位置超出已设置范围，跟随已停止。", true);
+            }
+            UpdateState();
         }
 
         private void Disconnect(bool closeWindow)
         {
             if (shuttingDown) return;
             CancelDrawing();
-            shuttingDown = true; refreshTimer.Stop();
-            int[] motors = MonitoredAxes(); joggingMotor = null; UpdateState();
-            Exception stopError = null;
-            session.Execute(this, delegate
+            refreshTimer.Stop();
+            int[] motors = MonitoredAxes();
+            manual.Disconnect(motors, delegate(Exception stopError, Exception error)
             {
-                try { if (session.IsConnected) session.Stop(motors); }
-                catch (Exception error) { stopError = error; }
-                finally { session.Disconnect(); }
-            }, delegate(Exception error)
-            {
-                connected = false; busy = false; shuttingDown = false; ResetSamples();
+                if (IsDisposed) return;
+                connected = false; ResetSamples();
                 if (stopError != null) Report("断开前停止失败：" + stopError.Message, true);
                 if (error != null) Report("设备关闭异常：" + error.Message, true);
                 else Report("设备连接已关闭。", false);
@@ -369,14 +369,11 @@ namespace Operations_Control
             if (dialog.ShowDialog(this) != DialogResult.OK) return;
             try
             {
-                if (new FileInfo(dialog.FileName).Length > 2 * 1024 * 1024)
-                    throw new InvalidOperationException("程序文件超过 2 MB，请使用专用编辑器处理。");
-                string content; Encoding encoding = new UTF8Encoding(false, true);
-                try { content = File.ReadAllText(dialog.FileName, encoding); }
-                catch (DecoderFallbackException) { encoding = Encoding.GetEncoding(936); content = File.ReadAllText(dialog.FileName, encoding); }
-                filePath = dialog.FileName; fileEncoding = encoding; savedText = content;
+                ProgramDocument document = ProgramFileStore.Read(dialog.FileName);
+                string content = document.Text;
+                filePath = document.Path; fileEncoding = document.Encoding; savedText = content;
                 editorWindow.Editor.Text = content;
-                programs.FileLabel.Text = Path.GetFileName(filePath) + "  ·  " + fileEncoding.WebName;
+                programs.FileLabel.Text = System.IO.Path.GetFileName(filePath) + "  ·  " + fileEncoding.WebName;
                 Report("已打开程序：" + filePath, false); UpdateState();
             }
             catch (Exception error) { Report("打开文件失败：" + error.Message, true); }
@@ -385,13 +382,13 @@ namespace Operations_Control
         private bool SaveProgram()
         {
             SaveFileDialog dialog = programSaveDialog;
-            dialog.FileName = String.IsNullOrEmpty(filePath) ? "program.pmc" : Path.GetFileName(filePath);
+            dialog.FileName = String.IsNullOrEmpty(filePath) ? "program.pmc" : System.IO.Path.GetFileName(filePath);
             if (dialog.ShowDialog(this) != DialogResult.OK) return false;
             try
             {
-                File.WriteAllText(dialog.FileName, editorWindow.Editor.Text, fileEncoding);
+                ProgramFileStore.Save(dialog.FileName, editorWindow.Editor.Text, fileEncoding);
                 filePath = dialog.FileName; savedText = editorWindow.Editor.Text;
-                programs.FileLabel.Text = Path.GetFileName(filePath) + "  ·  " + fileEncoding.WebName;
+                programs.FileLabel.Text = System.IO.Path.GetFileName(filePath) + "  ·  " + fileEncoding.WebName;
                 Report("程序已保存：" + filePath, false); UpdateState(); return true;
             }
             catch (Exception error) { Report("保存文件失败：" + error.Message, true); return false; }

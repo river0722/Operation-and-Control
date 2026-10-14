@@ -1,3 +1,4 @@
+using Application = System.Windows.Forms.Application;
 using System;
 using System.ComponentModel;
 using System.ComponentModel.Design;
@@ -11,7 +12,10 @@ using System.Windows.Forms;
 using Operations_Control;
 using Operations_Control.Controls;
 using Operations_Control.Models;
-using Operations_Control.Services;
+using Operations_Control.Communication;
+using Operations_Control.Motion;
+using Operations_Control.Files;
+using Operations_Control.Application;
 using Operations_Control.Views;
 
 internal static class SmokeTests
@@ -69,7 +73,7 @@ internal static class SmokeTests
     private static double Position(ControllerSession session, Form form, int motor)
     {
         bool done = false; double value = 0; Exception failure = null;
-        session.Execute(form, delegate { value = Double.Parse(session.Send("#" + motor + "P").Response, CultureInfo.InvariantCulture); },
+        session.Execute(delegate { value = Double.Parse(session.Send("#" + motor + "P").Response, CultureInfo.InvariantCulture); },
             delegate(Exception error) { failure = error; done = true; });
         Until(delegate { return done; }, "Query must complete");
         if (failure != null) throw failure;
@@ -191,6 +195,40 @@ internal static class SmokeTests
         Throws(delegate { CommandResult.Validate("ERR003", unchecked((int)0x80000006)); }, "Controller errors must fail even with EOT");
     }
 
+    private static void TestDispatch()
+    {
+        using (Form owner = new Form())
+        using (ControllerSession session = new ControllerSession(new WindowsFormsSynchronizationContext()))
+        {
+            owner.Show();
+            int caller = Thread.CurrentThread.ManagedThreadId, worker = 0, callback = 0;
+            ApartmentState apartment = ApartmentState.Unknown;
+            bool done = false;
+            session.Execute(delegate { worker = Thread.CurrentThread.ManagedThreadId; apartment = Thread.CurrentThread.GetApartmentState(); },
+                delegate(Exception error) { callback = Thread.CurrentThread.ManagedThreadId; done = true; });
+            Until(delegate { return done; }, "Controller dispatch completes without an owner parameter");
+            Check(worker != caller && apartment == ApartmentState.STA, "Device access stays on its dedicated STA thread");
+            Check(callback == caller, "Completion returns to the caller's UI synchronization context");
+            done = false; callback = 0;
+            SynchronizationContext previous = SynchronizationContext.Current;
+            try
+            {
+                SynchronizationContext.SetSynchronizationContext(null);
+                session.Execute(delegate { }, delegate(Exception error) { callback = Thread.CurrentThread.ManagedThreadId; done = true; });
+            }
+            finally { SynchronizationContext.SetSynchronizationContext(previous); }
+            Until(delegate { return done; }, "Explicit application context handles calls without an ambient context");
+            Check(callback == caller, "A missing ambient context cannot move UI callbacks onto the worker");
+            done = false; Exception failure = null;
+            session.Execute(delegate { throw new InvalidOperationException("expected dispatch failure"); }, delegate(Exception error) { failure = error; done = true; });
+            Until(delegate { return done; }, "Failed controller work still invokes completion");
+            Check(failure is InvalidOperationException, "Worker errors reach the caller without killing the dispatch thread");
+            done = false; session.Execute(delegate { }, delegate(Exception error) { done = true; });
+            Until(delegate { return done; }, "Dispatch continues accepting work after an error");
+            owner.Close();
+        }
+    }
+
     private static void TestInterface(string output)
     {
         using (Form1 form = new Form1())
@@ -299,7 +337,7 @@ internal static class SmokeTests
         using (ManualResetEvent started = new ManualResetEvent(false))
         using (ManualResetEvent release = new ManualResetEvent(false))
         {
-            session.Execute(form, delegate { started.Set(); release.WaitOne(2000); }, delegate(Exception error) { });
+            session.Execute(delegate { started.Set(); release.WaitOne(2000); }, delegate(Exception error) { });
             Check(started.WaitOne(2000), "Worker blocker must start");
             DrawMouse(canvases.DrawingCanvas, "OnMouseDown", 7, 7);
             CanvasFollower follower = (CanvasFollower)typeof(Form1).GetField("follower", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(form);
@@ -390,7 +428,7 @@ internal static class SmokeTests
         {
             Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
             string output = args.Length > 0 ? args[0] : "."; Directory.CreateDirectory(output);
-            TestDesigner(); TestCoordinates(); TestTransport(); TestInterface(output);
+            TestDesigner(); TestCoordinates(); TestTransport(); TestDispatch(); TestInterface(output);
             Console.WriteLine("PASS: " + assertions + " assertions; simulation only, no hardware accessed.");
             return 0;
         }

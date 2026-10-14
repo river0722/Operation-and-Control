@@ -1,19 +1,18 @@
+using Operations_Control.Files;
+using Operations_Control.Motion;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO;
-using System.Text;
 using System.Threading;
-using System.Windows.Forms;
 using Operations_Control.Models;
 
-namespace Operations_Control.Services
+namespace Operations_Control.Communication
 {
-    public sealed class ControllerSession : IDisposable
+    public sealed class ControllerSession : IControllerSession
     {
-        private readonly Thread thread;
-        private readonly Control dispatcher;
+        private readonly StaCommandDispatcher dispatcher = new StaCommandDispatcher();
+        private readonly SynchronizationContext completionContext;
         private readonly Stopwatch clock = Stopwatch.StartNew();
         private readonly Dictionary<int, double> positions = new Dictionary<int, double>();
         private readonly Dictionary<int, long> timestamps = new Dictionary<int, long>();
@@ -22,42 +21,12 @@ namespace Operations_Control.Services
         public bool IsConnected { get { return transport != null && transport.IsConnected; } }
         public string DeviceName { get { return transport == null ? String.Empty : transport.DeviceName; } }
 
-        public ControllerSession()
-        {
-            Control worker = null;
-            using (ManualResetEvent ready = new ManualResetEvent(false))
-            {
-                thread = new Thread(delegate()
-                {
-                    worker = new Control();
-                    IntPtr handle = worker.Handle;
-                    ready.Set();
-                    Application.Run();
-                    worker.Dispose();
-                });
-                thread.IsBackground = true;
-                thread.Name = "PMAC communication (STA)";
-                thread.SetApartmentState(ApartmentState.STA);
-                thread.Start();
-                ready.WaitOne();
-            }
-            dispatcher = worker;
-        }
+        public ControllerSession() : this(SynchronizationContext.Current) { }
+        public ControllerSession(SynchronizationContext completionContext) { this.completionContext = completionContext; }
 
-        public void Execute(Control owner, Action action, Action<Exception> completed)
+        public void Execute(Action action, Action<Exception> completed)
         {
-            if (disposed) return;
-            dispatcher.BeginInvoke((MethodInvoker)delegate
-            {
-                Exception failure = null;
-                try { action(); }
-                catch (Exception error) { failure = error; }
-                if (!owner.IsDisposed && owner.IsHandleCreated)
-                {
-                    try { owner.BeginInvoke((MethodInvoker)delegate { completed(failure); }); }
-                    catch (InvalidOperationException) { }
-                }
-            });
+            if (!disposed) dispatcher.Execute(action, completed, completionContext);
         }
 
         public bool Connect(bool simulation, int ownerWindow)
@@ -72,6 +41,28 @@ namespace Operations_Control.Services
         {
             try { if (transport != null) transport.Dispose(); }
             finally { transport = null; positions.Clear(); timestamps.Clear(); }
+        }
+
+        public void ZeroPosition(int motor)
+        {
+            ValidateMotor(motor); Send("#" + motor + "HOMEZ"); ClearSamples();
+        }
+
+        public ControllerFeedback ReadFeedback(int x, int y, int selectedMotor, int coordinateSystem)
+        {
+            ValidateMotor(selectedMotor);
+            ControllerSnapshot snapshot = ReadSnapshot(x, y, coordinateSystem);
+            AxisSample first = Sample(x, snapshot.XCounts), second = Sample(y, snapshot.YCounts);
+            AxisSample selected = selectedMotor == x ? first : selectedMotor == y ? second : Sample(selectedMotor, ReadPosition(selectedMotor));
+            return new ControllerFeedback(snapshot, new AxisSample[] { first, second, selected });
+        }
+
+        private AxisSample Sample(int motor, double position)
+        {
+            ValidateMotor(motor); long now = clock.ElapsedMilliseconds; double? velocity = null;
+            if (positions.ContainsKey(motor) && now > timestamps[motor]) velocity = (position - positions[motor]) / (now - timestamps[motor]);
+            positions[motor] = position; timestamps[motor] = now;
+            return new AxisSample(motor, position, velocity, DateTime.Now);
         }
 
         public void ClearSamples() { positions.Clear(); timestamps.Clear(); }
@@ -138,30 +129,6 @@ namespace Operations_Control.Services
             if (failure != null) throw failure;
         }
 
-        public AxisSample[] ReadAxes(int[] motors)
-        {
-            Dictionary<int, AxisSample> samples = new Dictionary<int, AxisSample>();
-            foreach (int motor in motors)
-            {
-                ValidateMotor(motor);
-                if (samples.ContainsKey(motor)) continue;
-                string response = Send("#" + motor + "P").Response.Trim();
-                double position;
-                if (!Double.TryParse(response, NumberStyles.Float, CultureInfo.InvariantCulture, out position) || Double.IsNaN(position) || Double.IsInfinity(position))
-                    throw new InvalidOperationException("电机 " + motor + " 的位置应答无效：" + response);
-                long now = clock.ElapsedMilliseconds;
-                double? velocity = null;
-                if (positions.ContainsKey(motor) && now > timestamps[motor])
-                    velocity = (position - positions[motor]) / (now - timestamps[motor]);
-                positions[motor] = position;
-                timestamps[motor] = now;
-                samples.Add(motor, new AxisSample(motor, position, velocity, DateTime.Now));
-            }
-            AxisSample[] result = new AxisSample[motors.Length];
-            for (int i = 0; i < motors.Length; i++) result[i] = samples[motors[i]];
-            return result;
-        }
-
         private static void ValidateMotor(int motor)
         {
             if (motor < 1 || motor > 8) throw new ArgumentOutOfRangeException("motor", "电机号应为 1–8。");
@@ -201,22 +168,24 @@ namespace Operations_Control.Services
             if (!state.Ready || !state.InPosition) throw new InvalidOperationException("X/Y 必须闭环就绪、无报警限位且已到位。");
             if (PathGeometry.Distance(plan.Options.Mapping.FromCounts(state.XCounts, state.YCounts), plan.InitialPosition) > 0.01)
                 throw new InvalidOperationException("当前位置与规划起点相差超过 0.01 mm，请重新规划。");
-            SimulatorTransport simulator = transport as SimulatorTransport;
+            IPlannedTransport simulator = transport as IPlannedTransport;
             if (cancelled()) throw new OperationCanceledException("路径启动已取消。");
             if (simulator != null) { double now = MonotonicClock.NowMs; simulator.StartPlan(plan, simulatorLagMs); return now; }
             CoordinateStatus coordinateState = CoordinateStatus.Parse(Send("&" + plan.Options.CoordinateSystem + "??").Response);
             if (coordinateState.Running || coordinateState.Fault || !coordinateState.InPosition) throw new InvalidOperationException("预留坐标系必须空闲、到位且无运行错误。");
-            string file = Path.Combine(Path.GetTempPath(), "pmac-trajectory-" + Guid.NewGuid().ToString("N") + ".pmc");
-            try
+            using (TemporaryProgram file = ProgramFileStore.CreateTemporary(plan.Program))
             {
-                File.WriteAllText(file, plan.Program, Encoding.ASCII); Download(file);
-                if (cancelled()) throw new OperationCanceledException("下载后已取消，未运行路径。");
-                double now = MonotonicClock.NowMs;
-                Send("&" + plan.Options.CoordinateSystem + "B" + plan.Options.ProgramNumber + "R"); return now;
+                try
+                {
+                    Download(file.Path);
+                    if (cancelled()) throw new OperationCanceledException("下载后已取消，未运行路径。");
+                    double now = MonotonicClock.NowMs;
+                    Send("&" + plan.Options.CoordinateSystem + "B" + plan.Options.ProgramNumber + "R"); return now;
+                }
+                catch { try { StopPlan(plan.Options.CoordinateSystem, plan.Options.XMotor, plan.Options.YMotor); } catch { } throw; }
             }
-            catch { try { StopPlan(plan.Options.CoordinateSystem, plan.Options.XMotor, plan.Options.YMotor); } catch { } throw; }
-            finally { if (File.Exists(file)) File.Delete(file); }
         }
+
         public void StopPlan(int coordinateSystem, int x, int y)
         {
             if (coordinateSystem < 1 || coordinateSystem > 16) throw new ArgumentException("坐标系统必须为 1–16。");
@@ -245,11 +214,7 @@ namespace Operations_Control.Services
         {
             if (disposed) return;
             disposed = true;
-            dispatcher.BeginInvoke((MethodInvoker)delegate
-            {
-                try { Disconnect(); }
-                finally { Application.ExitThread(); }
-            });
+            dispatcher.Shutdown(Disconnect);
         }
     }
 }

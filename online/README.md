@@ -35,10 +35,13 @@ DXF 支持 ASCII 格式的 LINE、ARC、CIRCLE、LWPOLYLINE、二维 POLYLINE �
 
 ## 项目文件
 
-`Form1` 协调主窗口；`Views/PathView` 处理绘图到分析流程；其余 Views 保留手动、坐标、程序和日志控件。`Services` 包含 DXF、几何、规划、分析及串行 STA 通信；`Models` 定义坐标、路径和 Turbo PMAC 状态。布局在 `.Designer.cs` 中，设计模式不会创建通信服务。
+`Form1` 和 `Views` 负责界面交互与显示；`Application` 管理手动操作、路径执行、机械回零、共享操作状态和统一反馈；`Communication` 封装 PMAC 命令、实机/模拟传输及串行 STA 调度；`Motion` 负责几何、规划和误差分析；`Files` 负责 DXF、程序编码与文件读写、运行数据导出；`Models` 定义模块之间传递的数据。布局仍在原有 `.Designer.cs` 中，设计模式不会创建通信服务。
+
+`build.ps1 -Test` 运行界面/模拟检查、工艺流程检查和不依赖界面的模块检查。模块检查使用可控假设备验证取消、回零、反馈失效及停止失败后的重试，不访问硬件。
 
 软件及模拟检查通过，实机通信、标定、机械回零与精度尚待验收。软件停止通过通信队列发送，不能替代硬件急停。
 
 - [操作与验收](docs/工艺工作台使用与验收.md)
+- [模块化架构与维护说明](docs/模块化架构与维护说明.md)
 - [任务完成情况](docs/上位机任务完成情况.md)
 - [DXF 样例](examples/course-shapes.dxf)
