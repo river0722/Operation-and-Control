@@ -23,5 +23,11 @@ namespace Operations_Control.Views
             selectedReadout.Clear("所选电机 / 电机 " + selected);
             freshness.Text = "数据未就绪 · 100 ms 轮询 · 速度由位置差估算";
         }
+        public void ShowAge(double age, bool fresh)
+        {
+            freshness.Text = fresh ? "反馈年龄 " + age.ToString("0") + " ms · 速度由位置差估算" : "反馈过期／未知 · 禁止运动";
+            freshness.ForeColor = fresh ? System.Drawing.SystemColors.ControlText : System.Drawing.Color.Firebrick;
+            if (!fresh) { xReadout.Clear("X：数据过期"); yReadout.Clear("Y：数据过期"); selectedReadout.Clear("所选轴：数据过期"); }
+        }
     }
 }

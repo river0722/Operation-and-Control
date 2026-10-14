@@ -233,7 +233,7 @@ internal static class WorkflowTests
                 Call(session, owner, delegate { session.Move(1, 500, 15); }); Pump(150);
                 Call(session, owner, delegate { session.SetSpeed(1, 0.01M); }); Pump(100);
                 Field<ComboBox>(form, "homeTarget").SelectedIndex = 0; Field<NumericUpDown>(form, "homeTimeout").Value = 1;
-                form.StartHoming(); Until(delegate { return !form.IsExecuting && Field<Label>(form, "feedbackLabel").Text.Contains("回零超时"); }, 4000, "Homing timeout stops slow axis");
+                form.StartHoming(); Until(delegate { return !form.IsExecuting && Field<Label>(form, "feedbackLabel").Text.Contains("回零超时") && Field<Label>(form, "feedbackLabel").Text.Contains("已停稳"); }, 4000, "Homing timeout stops slow axis and verifies stopping");
                 form.GeneratePlan(); Until(delegate { return form.CurrentPlan != null; }, 5000, "Replan at current position");
                 form.StartExecution(); main.Close(); Until(delegate { return main.IsDisposed; }, 5000, "Main close cancels pending start and stops");
             }

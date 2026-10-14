@@ -86,6 +86,9 @@ namespace Operations_Control.Views
             DrawingCanvas.EndStroke(); Follow.Checked = false; ActualCanvas.ClearPath();
             traceInfo.Text = "电机映射已修改 · 请确认比例与行程并应用";
         }
+        public void InvalidateLoadedMapping()
+        { dirty = true; HardwareCalibrated = false; Follow.Checked = false; traceInfo.Text = "载入配置待核对 · 请应用坐标"; }
+        public void ApplyCurrentSettings() { ApplySettings(null, EventArgs.Empty); }
 
         public void SetState(bool ready, bool busy, bool following)
         {

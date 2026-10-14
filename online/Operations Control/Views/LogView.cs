@@ -8,7 +8,9 @@ namespace Operations_Control.Views
     public partial class LogView : UserControl
     {
         private int count;
-        public LogView() { InitializeComponent(); }
+        public string LogDirectory { get; set; }
+        public string PersistenceError { get; private set; }
+        public LogView() { InitializeComponent(); LogDirectory = System.IO.Path.Combine(DeviceConfigurationStore.DirectoryPath, "logs"); }
 
         private void ClearLog(object sender, EventArgs e) { entries.Clear(); count = 0; }
 
@@ -22,8 +24,17 @@ namespace Operations_Control.Views
 
         public void Append(string level, string message)
         {
-            if (count >= 500) { entries.Clear(); count = 0; }
-            entries.AppendText(DateTime.Now.ToString("HH:mm:ss") + "  [" + level + "]  " + message.Replace("\r", " ").Replace("\n", " ") + Environment.NewLine);
+            string line = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff") + "  [" + level + "]  " + message.Replace("\r", " ").Replace("\n", " ") + Environment.NewLine;
+            try
+            {
+                System.IO.Directory.CreateDirectory(LogDirectory);
+                System.IO.File.AppendAllText(System.IO.Path.Combine(LogDirectory, DateTime.Now.ToString("yyyyMMdd") + ".log"), line, new UTF8Encoding(false));
+                PersistenceError = null;
+            }
+            catch (Exception error) { PersistenceError = "日志写入失败：" + error.Message; }
+            if (count >= 500) { int end = entries.Text.IndexOf(Environment.NewLine); if (end >= 0) entries.Text = entries.Text.Substring(end + Environment.NewLine.Length); count--; }
+            entries.AppendText(line);
+            if (PersistenceError != null) entries.AppendText(PersistenceError + Environment.NewLine);
             count++;
         }
     }

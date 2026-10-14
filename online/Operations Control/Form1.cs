@@ -34,6 +34,12 @@ namespace Operations_Control
         private string savedText = String.Empty;
         private Encoding fileEncoding = new UTF8Encoding(false);
         private PathView pathView;
+        private MotionGuard motionGuard;
+        private DeviceConfiguration configuration;
+        private AxisStatusView axisStates;
+        private DiagnosticsView diagnostics;
+        private AlarmService alarms;
+        private bool disconnectPending, closePending;
 
         public Form1()
         {
@@ -44,8 +50,11 @@ namespace Operations_Control
             Size = new Size(Math.Min(Width, workspace.Width - 24), Math.Min(Height, workspace.Height - 24));
             operations = new OperationState();
             session = new ControllerSession(new WindowsFormsSynchronizationContext());
-            manual = new ManualMotionService(session, operations);
             feedbackService = new FeedbackService(session);
+            configuration = NewConfiguration(true);
+            motionGuard = new MotionGuard { Configuration = configuration };
+            manual = new ManualMotionService(session, operations, feedbackService, motionGuard);
+            alarms = new AlarmService();
             follower = new CanvasFollower(session);
             editorWindow = new ProgramEditorForm(); logWindow = new LogForm(); log = logWindow.Log;
             editorWindow.Icon = Icon; logWindow.Icon = Icon;
@@ -53,12 +62,30 @@ namespace Operations_Control
             canvases.ConfigureMode(connection.IsSimulation);
             IntegrateViews();
             WireEvents();
-            manual.StateChanged += delegate { if (!IsDisposed) UpdateState(); };
+            manual.StatusChanged += delegate { if (!IsDisposed) Report(manual.StatusText, manual.StatusError); };
+            alarms.Transition += delegate(AlarmRecord alarm) { log.Append(alarm.Active ? "报警" : "恢复", alarm.Source + "：" + alarm.Message + "；" + alarm.Advice); };
+            alarms.Changed += delegate
+            {
+                if (IsDisposed) return;
+                diagnostics.ShowAlarms(alarms); alarmSummary.Text = "当前报警：" + alarms.ActiveCount + " · 点击查看";
+                for (int i = alarms.History.Count - 1; i >= 0; i--) if (alarms.History[i].Active) { alarmSummary.Text += " · " + alarms.History[i].Source + " " + alarms.History[i].Message; break; }
+            };
+            alarmSummary.Click += delegate { pathView.Pages.SelectedIndex = pathView.Pages.TabPages.Count - 1; diagnostics.SelectAlarms(); };
+            manual.StateChanged += delegate
+            {
+                if (IsDisposed) return;
+                UpdateState();
+                if (disconnectPending && !operations.ManualExecuting && !busy) { bool close = closePending; disconnectPending = closePending = false; FinishDisconnect(close); }
+                else if (disconnectPending && operations.ManualStopFailed) { disconnectPending = closePending = false; Report("无法确认停稳，连接已保留；请检查设备或重试停止。", true); }
+            };
             feedbackService.Updated += delegate { RefreshData(null, EventArgs.Empty); };
             feedbackService.Failed += delegate(Exception error)
             {
-                if (IsDisposed || shuttingDown || pathView.IsExecuting) return;
-                Report("位置刷新失败：" + error.Message, true); ResetSamples(); Disconnect(false);
+                if (IsDisposed || shuttingDown) return;
+                operations.FeedbackStale = true;
+                alarms.Set("communication", true, "通信", error.Message, "检查连接和控制器；恢复通信后核实设备状态，手动重新启动。");
+                Report("反馈未知：" + error.Message, true); samplesReady = false;
+                if (follower.Active) CancelDrawing(); UpdateState();
             };
             readouts.Clear(motion.XAxis, motion.YAxis, motion.Motor);
             refreshTimer.Start();
@@ -95,6 +122,12 @@ namespace Operations_Control
             programLayout.Controls.Add(generatedGroup, 0, 0); programLayout.Controls.Add(fileGroup, 1, 0); pathView.ProgramPage.Controls.Add(programLayout); editorWindow.Show();
             logPage = new TabPage("日志"); logWindow.TopLevel = false; logWindow.FormBorderStyle = FormBorderStyle.None; logWindow.MinimumSize = Size.Empty; logWindow.Dock = DockStyle.Fill;
             logPage.Controls.Add(logWindow); pathView.Pages.TabPages.Add(logPage); logWindow.Show();
+            axisStates = new AxisStatusView { Dock = DockStyle.Fill };
+            manualLayout.RowCount = 4; manualLayout.RowStyles[2].SizeType = SizeType.Absolute; manualLayout.RowStyles[2].Height = 118;
+            manualLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); manualLayout.Controls.Add(axisStates, 0, 2);
+            diagnostics = new DiagnosticsView { Dock = DockStyle.Fill };
+            TabPage diagnosticsPage = new TabPage("诊断与配置"); diagnosticsPage.Controls.Add(diagnostics); pathView.Pages.TabPages.Add(diagnosticsPage);
+            diagnostics.ShowProfile(configuration, motion.Motor);
             contentPanel.Controls.Remove(workspaceTabs); workspaceTabs.Dispose(); contentPanel.Controls.Add(pathView);
             pathView.ActivityChanged += delegate { UpdateState(); };
             pathView.StatusChanged += delegate { Report(pathView.StatusText, pathView.StatusError); };
@@ -115,6 +148,8 @@ namespace Operations_Control
                 Run("正在连接设备…", delegate { opened = session.Connect(simulation, owner); }, delegate
                 {
                     connected = opened;
+                    operations.FeedbackStale = false;
+                    if (opened) { if (!simulation) canvases.AxisMappingChanged(); pathView.ResumePolling(); }
                     feedbackService.Clear(); samplesReady = false; currentSamples = null; canvases.BreakTrace();
                     Report(opened ? "已连接 " + session.DeviceName : "已取消设备选择。", false);
                     UpdateState(); if (connected) RefreshData(null, EventArgs.Empty);
@@ -123,36 +158,67 @@ namespace Operations_Control
             connection.DisconnectButton.Click += delegate { Disconnect(false); };
             connection.Mode.SelectedIndexChanged += delegate
             {
-                if (!connected && !busy) { canvases.ConfigureMode(connection.IsSimulation); UpdateState(); }
+                if (!connected && !busy) { canvases.ConfigureMode(connection.IsSimulation); configuration = NewConfiguration(connection.IsSimulation); motionGuard.Configuration = configuration; diagnostics.ShowProfile(configuration, motion.Motor); UpdateState(); }
             };
             motion.JogStarted += StartJog;
             motion.JogReleased += delegate { StopJog(); };
             motion.MoveButton.Click += delegate
             {
                 int motor = motion.Motor; decimal target = motion.Target.Value; decimal speed = motion.Speed.Value;
-                Run("正在发送定位命令…", delegate { session.Move(motor, target, speed); },
-                    delegate { Report("电机 " + motor + " 定位命令已接受，目标 " + target + " ct。", false); });
+                TryMotion(delegate { manual.Move(motor, target, speed); });
             };
             motion.ZeroButton.Click += delegate
             {
                 int motor = motion.Motor;
+                AxisSample selected = feedbackService.Latest == null ? null : feedbackService.Latest.Find(motor);
+                if (selected == null || selected.Status == null || !feedbackService.Fresh || !selected.Status.VelocityZero || !selected.Status.InPosition) { Report("当前位置置零前需要有效反馈并确认停稳。", true); return; }
                 if (MessageBox.Show(this, "将电机 " + motor + " 的当前位置设为零点（HOMEZ）？",
                     "当前位置置零", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
-                Run("正在设置当前位置零点…",
-                    delegate { session.ZeroPosition(motor); },
-                    delegate { ResetSamples(); Report("电机 " + motor + " 当前位置置零命令已接受。", false); });
+                TryMotion(delegate { manual.ZeroPosition(motor); });
             };
             motion.ApplySpeedButton.Click += delegate
             {
                 int x = motion.XAxis; int y = motion.YAxis; decimal speed = motion.Speed.Value;
+                if (speed > configuration.Axis(x).MaximumSpeed || speed > configuration.Axis(y).MaximumSpeed) { Report("速度超过 X/Y 配置上限，请调整速度或核对每轴参数。", true); return; }
                 Run("正在设置速度…", delegate { session.SetSpeed(x, speed); if (x != y) session.SetSpeed(y, speed); },
-                    delegate { Report("X / Y 轴点动速度已设置为 " + speed + " ct/ms。", false); });
+                    delegate { Report("X / Y 轴点动速度已写入并回读确认：" + speed + " ct/ms。", false); });
             };
             motion.StopButton.Click += delegate { StopMonitoredAxes(); };
             EventHandler axesChanged = delegate { CancelDrawing(); canvases.AxisMappingChanged(); ResetSamples(); UpdateState(); };
             motion.XMotor.SelectedIndexChanged += axesChanged;
             motion.YMotor.SelectedIndexChanged += axesChanged;
-            motion.SelectedMotor.SelectedIndexChanged += delegate { CancelDrawing(); ResetSamples(); UpdateState(); };
+            motion.SelectedMotor.SelectedIndexChanged += delegate { CancelDrawing(); ResetSamples(); diagnostics.ShowAxisParameters(configuration, motion.Motor); UpdateState(); };
+            axisStates.EnableButton.Click += delegate { TryMotion(delegate { manual.SetEnabled(motion.Motor, true); }); };
+            axisStates.DisableButton.Click += delegate
+            {
+                if (!connection.IsSimulation && MessageBox.Show(this, "去使能会撤销电机保持力。已确认该轴停稳和抱闸流程？", "所选轴去使能", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+                TryMotion(delegate { manual.SetEnabled(motion.Motor, false); });
+            };
+            axisStates.ResetButton.Click += delegate { TryMotion(delegate { manual.Reset(motion.Motor); }); };
+            diagnostics.ApplyButton.Click += delegate
+            {
+                TryMotion(delegate
+                {
+                    diagnostics.ApplyProfile(configuration);
+                    AxisConfiguration axis = configuration.Axis(motion.Motor);
+                    if (canvases.MappingReady && (motion.Motor == motion.XAxis || motion.Motor == motion.YAxis))
+                    {
+                        if (motion.Motor == motion.XAxis) { canvases.XMin.Value = (decimal)(axis.MinimumCounts / canvases.Settings.XCountsPerUnit); canvases.XMax.Value = (decimal)(axis.MaximumCounts / canvases.Settings.XCountsPerUnit); }
+                        else { canvases.YMin.Value = (decimal)(axis.MinimumCounts / canvases.Settings.YCountsPerUnit); canvases.YMax.Value = (decimal)(axis.MaximumCounts / canvases.Settings.YCountsPerUnit); }
+                        canvases.ApplyCurrentSettings();
+                    }
+                    Report("所选轴行程、速度上限和复位命令已应用。", false); UpdateState();
+                });
+            };
+            diagnostics.SaveButton.Click += delegate { SaveConfiguration(); };
+            diagnostics.LoadButton.Click += delegate { LoadConfiguration(); };
+            diagnostics.ReadSpeedButton.Click += delegate
+            {
+                int axis = motion.Motor; string response = null;
+                Run("正在回读速度…", delegate { response = session.Send("I" + axis + "22").Response.Trim(); }, delegate { diagnostics.ParameterResult.Text = "电机 " + axis + " 实际点动速度：" + response + " ct/ms"; });
+            };
+            diagnostics.ReadIoButton.Click += delegate { ReadIo(); };
+            diagnostics.AcknowledgeButton.Click += delegate { alarms.Acknowledge(); Report("当前报警已确认；仍存在的故障继续显示。", false); };
             programs.SendButton.Click += delegate { SendCommand(); };
             programs.Command.KeyDown += delegate(object sender, KeyEventArgs e)
             {
@@ -170,13 +236,13 @@ namespace Operations_Control
             };
             canvases.DrawingCanvas.StrokeEnded += delegate
             {
-                if (follower.Active) Report("绘图跟随结束，已发送双轴停止请求。", false);
-                follower.Cancel(); UpdateState();
+                bool active = follower.Active;
+                follower.Cancel(); if (active) manual.Stop(new int[] { motion.XAxis, motion.YAxis }); UpdateState();
             };
             canvases.Follow.CheckedChanged += delegate { if (!canvases.Follow.Checked) CancelDrawing(); };
-            canvases.SettingsApplied += delegate { CancelDrawing(); UpdateState(); };
+            canvases.SettingsApplied += delegate { CancelDrawing(); SyncMappedAxes(); diagnostics.ShowAxisParameters(configuration, motion.Motor); UpdateState(); };
             canvases.MappingChanged += delegate { CancelDrawing(); UpdateState(); };
-            follower.Failed += delegate { CancelDrawing(); Report(follower.Error, true); };
+            follower.Failed += delegate { CancelDrawing(); if (connected && !shuttingDown) manual.Stop(new int[] { motion.XAxis, motion.YAxis }); Report(follower.Error, true); };
             Deactivate += delegate { StopJog(); CancelDrawing(); }; FormClosing += CloseForm;
             KeyDown += delegate(object sender, KeyEventArgs e)
             {
@@ -191,6 +257,67 @@ namespace Operations_Control
             readouts.Clear(motion.XAxis, motion.YAxis, motion.Motor); canvases.BreakTrace();
             xPosition.Text = "X —"; yPosition.Text = "Y —";
         }
+        private static DeviceConfiguration NewConfiguration(bool simulation)
+        {
+            DeviceConfiguration config = new DeviceConfiguration();
+            for (int axis = 1; axis <= 8; axis++) config.Axes.Add(new AxisConfiguration { Motor = axis, TravelConfigured = simulation, MaximumSpeed = simulation ? 15 : 1, ResetCommand = simulation ? "SIMRESET{motor}" : String.Empty });
+            return config;
+        }
+        private void TryMotion(Action action)
+        { try { action(); } catch (Exception error) { Report(error.Message, true); } }
+        private void SyncMappedAxes()
+        {
+            if (!canvases.MappingReady) return;
+            AxisConfiguration x = configuration.Axis(motion.XAxis), y = configuration.Axis(motion.YAxis);
+            x.MinimumCounts = canvases.Settings.XMin * canvases.Settings.XCountsPerUnit; x.MaximumCounts = canvases.Settings.XMax * canvases.Settings.XCountsPerUnit; x.TravelConfigured = true;
+            y.MinimumCounts = canvases.Settings.YMin * canvases.Settings.YCountsPerUnit; y.MaximumCounts = canvases.Settings.YMax * canvases.Settings.YCountsPerUnit; y.TravelConfigured = true;
+        }
+        private void SaveConfiguration()
+        {
+            TryMotion(delegate
+            {
+                if (!canvases.MappingReady) throw new InvalidOperationException("请先应用并核对坐标参数。");
+                diagnostics.ApplyProfile(configuration);
+                CanvasSettings mapping = canvases.Settings;
+                configuration.XMotor = motion.XAxis; configuration.YMotor = motion.YAxis;
+                configuration.XMin = mapping.XMin; configuration.XMax = mapping.XMax; configuration.YMin = mapping.YMin; configuration.YMax = mapping.YMax;
+                configuration.XScale = mapping.XCountsPerUnit; configuration.YScale = mapping.YCountsPerUnit; configuration.DeviceName = connected ? session.DeviceName : configuration.DeviceName;
+                string path = DeviceConfigurationStore.ProfilePath(connection.IsSimulation); DeviceConfigurationStore.Save(path, configuration);
+                diagnostics.ParameterResult.Text = "配置已保存：" + path; Report("设备配置已保存。", false);
+            });
+        }
+        private void LoadConfiguration()
+        {
+            TryMotion(delegate
+            {
+                DeviceConfiguration loaded = DeviceConfigurationStore.Load(DeviceConfigurationStore.ProfilePath(connection.IsSimulation));
+                if (connected && !connection.IsSimulation && loaded.DeviceName != session.DeviceName) throw new InvalidOperationException("配置设备与当前连接设备不一致，请选择对应设备。");
+                configuration = loaded; motionGuard.Configuration = loaded;
+                motion.XMotor.SelectedItem = loaded.XMotor; motion.YMotor.SelectedItem = loaded.YMotor;
+                canvases.XMin.Value = (decimal)loaded.XMin; canvases.XMax.Value = (decimal)loaded.XMax; canvases.YMin.Value = (decimal)loaded.YMin; canvases.YMax.Value = (decimal)loaded.YMax;
+                canvases.XScale.Value = (decimal)loaded.XScale; canvases.YScale.Value = (decimal)loaded.YScale;
+                canvases.InvalidateLoadedMapping();
+                diagnostics.ShowProfile(configuration, motion.Motor); ResetSamples(); UpdateState();
+                Report("配置已载入；请核对设备、比例、行程和零点，再点击应用坐标。", false);
+            });
+        }
+        private void ReadIo()
+        {
+            TryMotion(delegate
+            {
+                List<IoConfiguration> inputs = diagnostics.ReadInputs(); List<string> values = new List<string>();
+                if (inputs.Count == 0) { Report("请先按实际接线填写 I/O 查询变量。", true); return; }
+                Run("正在读取 I/O…", delegate
+                {
+                    foreach (IoConfiguration input in inputs)
+                    {
+                        double value; string response = session.Send(input.Query).Response.Trim();
+                        if (!Double.TryParse(response, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out value) || !PlanningOptions.Finite(value)) throw new InvalidOperationException("I/O 反馈无效：" + input.Query);
+                        bool active = input.ActiveLow ? value == 0 : value != 0; values.Add(response + (active ? " · 有效" : " · 无效"));
+                    }
+                }, delegate { diagnostics.ShowIo(values); Report("I/O 已读取；按实际接线确认信号含义。", false); });
+            });
+        }
 
         private void DisplayPosition(double x, double y)
         {
@@ -203,7 +330,13 @@ namespace Operations_Control
             if (pathView.IsBusy) return;
             if (!canvases.Follow.Checked) return;
             if (!connected || busy || shuttingDown || joggingMotor.HasValue || !samplesReady ||
-                !canvases.MappingReady || motion.XAxis == motion.YAxis) return;
+                operations.ManualExecuting || operations.FeedbackStale || !canvases.MappingReady || motion.XAxis == motion.YAxis) return;
+            try
+            {
+                motionGuard.Require(feedbackService.Latest.Find(motion.XAxis), 0, currentSamples[0].Position, motion.Speed.Value, true);
+                motionGuard.Require(feedbackService.Latest.Find(motion.YAxis), 0, currentSamples[1].Position, motion.Speed.Value, true);
+            }
+            catch (InvalidOperationException error) { Report(error.Message, true); return; }
             MotionPoint position = canvases.Settings.FromCounts(currentSamples[0].Position, currentSamples[1].Position);
             if (!canvases.Settings.Contains(position) || (DateTime.Now - currentSamples[0].Timestamp).TotalSeconds > 1)
             {
@@ -226,13 +359,19 @@ namespace Operations_Control
         {
             operations.Following = follower.Active;
             bool pathBusy = pathView != null && pathView.IsBusy;
-            connection.ShowState(connected, busy || shuttingDown || pathBusy, connected ? session.DeviceName : String.Empty);
-            motion.SetState(connected && !shuttingDown, busy || follower.Active || pathBusy, joggingMotor.HasValue);
+            bool manualBusy = busy || operations.ManualExecuting;
+            motionGuard.Mapping = canvases.Settings; motionGuard.MappingReady = canvases.MappingReady;
+            motionGuard.XMotor = motion.XAxis; motionGuard.YMotor = motion.YAxis; motionGuard.Simulation = connection.IsSimulation;
+            connection.ShowState(connected, manualBusy || shuttingDown || pathBusy, connected ? session.DeviceName : String.Empty);
+            motion.SetState(connected && !shuttingDown && !operations.FeedbackStale, manualBusy || follower.Active || pathBusy, joggingMotor.HasValue);
+            motion.ApplyGuard(motionGuard, feedbackService.Latest, feedbackService.Fresh);
             programs.SetState(connected && !shuttingDown,
-                busy || joggingMotor.HasValue || follower.Active || shuttingDown || pathBusy, !String.IsNullOrEmpty(filePath));
-            editorWindow.Editor.ReadOnly = busy || follower.Active || shuttingDown || pathBusy;
+                manualBusy || !feedbackService.Fresh || operations.FeedbackStale || follower.Active || shuttingDown || pathBusy, !String.IsNullOrEmpty(filePath));
+            editorWindow.Editor.ReadOnly = manualBusy || follower.Active || shuttingDown || pathBusy;
             canvases.SetState(connected && !shuttingDown && samplesReady && motion.XAxis != motion.YAxis,
-                busy || joggingMotor.HasValue || shuttingDown || pathBusy, follower.Active);
+                manualBusy || shuttingDown || pathBusy, follower.Active);
+            axisStates.Display(feedbackService.Latest, feedbackService.Fresh && connected, motion.Motor, manualBusy || follower.Active || pathBusy || shuttingDown);
+            diagnostics.Display(feedbackService.Latest, feedbackService.Fresh && connected, motion.Motor, manualBusy || follower.Active || pathBusy || shuttingDown);
             globalStop.Enabled = connected && !shuttingDown;
             if (pathView != null)
             {
@@ -243,7 +382,7 @@ namespace Operations_Control
 
         private void Run(string message, Action action, Action success)
         {
-            if (busy || shuttingDown || follower.Active || pathView.IsBusy) return;
+            if (busy || operations.ManualExecuting || shuttingDown || follower.Active || pathView.IsBusy) return;
             feedback.Text = message; feedback.ForeColor = UiTheme.Muted;
             manual.Execute(action, delegate(Exception error)
             {
@@ -263,28 +402,19 @@ namespace Operations_Control
         private void StartJog(object sender, JogRequestEventArgs e)
         {
             decimal? step = motion.SingleStep.Checked ? (decimal?)motion.Step.Value : null;
-            manual.StartJog(e.Motor, e.Direction, motion.Speed.Value, step, delegate(Exception error)
-            {
-                if (IsDisposed) return;
-                if (error != null) Report(error.Message, true);
-                else Report("电机 " + e.Motor + (step.HasValue ? " 单步点动命令已接受。" : " 连续点动命令已接受。"), false);
-            });
+            TryMotion(delegate { manual.StartJog(e.Motor, e.Direction, motion.Speed.Value, step, null); });
         }
 
         private void StopJog()
         {
-            manual.StopJog(delegate(int motor, Exception error)
-            {
-                if (IsDisposed) return;
-                Report(error == null ? "电机 " + motor + " 停止命令已接受。" : "停止失败：" + error.Message, error != null);
-                UpdateState();
-            });
+            manual.StopJog(null);
         }
 
         private int[] MonitoredAxes()
         {
             List<int> motors = new List<int>(new int[] { motion.XAxis, motion.YAxis, motion.Motor });
             if (joggingMotor.HasValue) motors.Add(joggingMotor.Value);
+            if (operations.MovingMotor.HasValue) motors.Add(operations.MovingMotor.Value);
             return motors.ToArray();
         }
 
@@ -300,33 +430,47 @@ namespace Operations_Control
             if (!connected || shuttingDown) return;
             CancelDrawing();
             int[] motors = MonitoredAxes(); joggingMotor = null;
-            session.Execute(delegate { session.Stop(motors); }, delegate(Exception error)
-            {
-                Report(error == null ? "X / Y 和所选电机停止命令已接受。" : "停止失败：" + error.Message, error != null);
-                UpdateState();
-            });
+            manual.Stop(motors);
             UpdateState();
         }
 
         private void RefreshData(object sender, EventArgs e)
         {
+            if (IsDisposed || feedbackService == null) return;
+            feedbackService.CheckTimeout(); manual.Tick();
+            if (connected) readouts.ShowAge(feedbackService.AgeMs, feedbackService.Fresh);
+            if (connected && !feedbackService.Fresh) { xPosition.Text = "X 未知"; yPosition.Text = "Y 未知"; UpdateState(); }
             if (IsDisposed || !connected || shuttingDown || feedbackService.Latest == null) return;
             AxisSample[] samples = feedbackService.Latest.Axes;
             if (samples[0].Motor != motion.XAxis || samples[1].Motor != motion.YAxis || samples[2].Motor != motion.Motor) return;
             samplesReady = true; currentSamples = samples; readouts.Display(samples);
+            readouts.ShowAge(feedbackService.AgeMs, feedbackService.Fresh);
+            operations.FeedbackStale = false;
+            alarms.Set("communication", false, "通信", "", ""); alarms.Update(feedbackService.Latest);
             if (!pathView.IsExecuting) canvases.Display(samples[0].Position, samples[1].Position);
             DisplayPosition(samples[0].Position, samples[1].Position);
             if (follower.Active && !canvases.Settings.Contains(canvases.Settings.FromCounts(samples[0].Position, samples[1].Position)))
             {
                 CancelDrawing(); canvases.Follow.Checked = false; Report("反馈位置超出已设置范围，跟随已停止。", true);
             }
+            if (follower.Active && !feedbackService.Latest.Snapshot.Ready)
+            { CancelDrawing(); Report("轴故障、限位或失能，鼠标跟随已停止。", true); }
             UpdateState();
         }
 
         private void Disconnect(bool closeWindow)
         {
             if (shuttingDown) return;
+            if (!connected) { FinishDisconnect(closeWindow); return; }
+            if (disconnectPending) { closePending = closePending || closeWindow; return; }
+            disconnectPending = true; closePending = closeWindow;
+            CancelDrawing(); manual.Stop(MonitoredAxes());
+        }
+        private void FinishDisconnect(bool closeWindow)
+        {
+            if (shuttingDown) return;
             CancelDrawing();
+            pathView.CancelPendingWork();
             refreshTimer.Stop();
             int[] motors = MonitoredAxes();
             manual.Disconnect(motors, delegate(Exception stopError, Exception error)
@@ -414,7 +558,7 @@ namespace Operations_Control
                 { if (error == null) Close(); else Report("停止失败：" + error.Message, true); }); return;
             }
             e.Cancel = true; if (shuttingDown) return;
-            StopJog(); CancelDrawing(); if (!ConfirmDiscard()) return; pathView.CancelPendingWork(); Disconnect(true);
+            StopJog(); CancelDrawing(); if (!ConfirmDiscard()) return; Disconnect(true);
         }
     }
 }

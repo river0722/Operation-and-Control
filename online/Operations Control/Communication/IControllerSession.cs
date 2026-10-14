@@ -16,7 +16,9 @@ namespace Operations_Control.Communication
         CommandResult Send(string command);
         void SetSpeed(int motor, decimal speed);
         void Jog(int motor, int direction, decimal speed, decimal? step);
+        void Jog(int motor, int direction, decimal speed, decimal? step, Func<bool> cancelled);
         void Move(int motor, decimal target, decimal speed);
+        void Move(int motor, decimal target, decimal speed, Func<bool> cancelled);
         void MovePair(int x, int y, MotionPoint point);
         void ZeroPosition(int motor);
         void Stop(IEnumerable<int> motors);
@@ -27,6 +29,7 @@ namespace Operations_Control.Communication
         void StopPlan(int coordinateSystem, int x, int y);
         void SetEnabled(int motor, bool enabled);
         void Home(int x, int y, bool both, int plc);
+        void Home(int x, int y, bool both, int plc, Func<bool> cancelled);
         void StopHome(int x, int y, int plc);
     }
 }

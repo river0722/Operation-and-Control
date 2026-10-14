@@ -94,6 +94,14 @@ namespace Operations_Control.Communication
             }
             if (Regex.IsMatch(text, @"^&(?:[1-9]|1[0-6])A$")) { StopPlan(); return Result(String.Empty); }
             if (Regex.IsMatch(text, @"^(ENABLE|DISABLE) PLC \d+$")) throw new InvalidOperationException("模拟器未执行用户 PLC；请选择内置 HOME 模拟回零。");
+            Match diagnostic = Regex.Match(text, @"^SIM(FAULT|RESET)([1-8])$");
+            if (diagnostic.Success)
+            {
+                int number = Int32.Parse(diagnostic.Groups[2].Value);
+                if (diagnostic.Groups[1].Value == "FAULT") InjectFault(number);
+                else { Axis axis = axes[number - 1]; axis.Fault = false; axis.Enabled = false; axis.Direction = 0; axis.Target = null; }
+                return Result(String.Empty);
+            }
             Match speed = Regex.Match(text, @"^I([1-8])22(?:=([+-]?\d+(?:\.\d+)?))?$");
             if (speed.Success)
             {
@@ -104,11 +112,23 @@ namespace Operations_Control.Communication
                 axis.Speed = value;
                 return Result(String.Empty);
             }
-            Match motor = Regex.Match(text, @"^#([1-8])(P|\?|K|HM|HOME|J\+|J-|J/|HOMEZ|J[=\^]([+-]?\d+(?:\.\d+)?))$");
+            Match motor = Regex.Match(text, @"^#([1-8])(P|F|\?|K|HM|HOME|J\+|J-|J/|HOMEZ|J[=\^]([+-]?\d+(?:\.\d+)?))$");
             if (!motor.Success) throw new InvalidOperationException("模拟模式支持 #nP、#nJ+、#nJ-、#nJ/、#nJ=值、#nJ^值、#nHOMEZ、In22、VERSION。");
             Axis selected = axes[Int32.Parse(motor.Groups[1].Value) - 1];
             string operation = motor.Groups[2].Value;
             if (operation == "P") return Result(selected.Position.ToString("0.###", CultureInfo.InvariantCulture));
+            if (operation == "F")
+            {
+                double error = 0;
+                if (plan != null)
+                {
+                    MotionPoint desired = plan.Options.Mapping.ToCounts(plan.At(Math.Min(plan.DurationMs, clock.ElapsedMilliseconds - planStart)));
+                    int number = Int32.Parse(motor.Groups[1].Value);
+                    if (number == plan.Options.XMotor) error = desired.X - selected.Position;
+                    else if (number == plan.Options.YMotor) error = desired.Y - selected.Position;
+                }
+                return Result(error.ToString("0.###", CultureInfo.InvariantCulture));
+            }
             if (operation == "?")
             {
                 bool moving = selected.HomeSearching || selected.Target.HasValue || selected.Direction != 0 || (plan != null && (Int32.Parse(motor.Groups[1].Value) == plan.Options.XMotor || Int32.Parse(motor.Groups[1].Value) == plan.Options.YMotor));

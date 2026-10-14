@@ -52,4 +52,10 @@ if ($Test) {
     if ($LASTEXITCODE -ne 0) { throw 'Module test compilation failed.' }
     & $moduleRunner
     if ($LASTEXITCODE -ne 0) { throw 'Module tests failed.' }
+    $motorRunner = Join-Path $output 'OperationsControl.MotorDebugTests.exe'
+    $motorSource = Join-Path $projectRoot 'Tests\MotorDebugTests.cs'
+    & $compiler /nologo /target:exe /platform:x86 "/out:$motorRunner" "/reference:$application" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Core.dll $motorSource
+    if ($LASTEXITCODE -ne 0) { throw 'Motor debugging test compilation failed.' }
+    & $motorRunner $ScreenshotDirectory
+    if ($LASTEXITCODE -ne 0) { throw 'Motor debugging tests failed.' }
 }

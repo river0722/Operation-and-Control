@@ -53,7 +53,14 @@ namespace Operations_Control.Communication
             ValidateMotor(selectedMotor);
             ControllerSnapshot snapshot = ReadSnapshot(x, y, coordinateSystem);
             AxisSample first = Sample(x, snapshot.XCounts), second = Sample(y, snapshot.YCounts);
+            first.Status = snapshot.XStatus; second.Status = snapshot.YStatus;
+            first.FollowingError = ReadNumber("#" + x + "F"); second.FollowingError = ReadNumber("#" + y + "F");
             AxisSample selected = selectedMotor == x ? first : selectedMotor == y ? second : Sample(selectedMotor, ReadPosition(selectedMotor));
+            if (selectedMotor != x && selectedMotor != y)
+            {
+                selected.Status = MotorStatus.Parse(Send("#" + selectedMotor + "?").Response);
+                selected.FollowingError = ReadNumber("#" + selectedMotor + "F");
+            }
             return new ControllerFeedback(snapshot, new AxisSample[] { first, second, selected });
         }
 
@@ -62,7 +69,7 @@ namespace Operations_Control.Communication
             ValidateMotor(motor); long now = clock.ElapsedMilliseconds; double? velocity = null;
             if (positions.ContainsKey(motor) && now > timestamps[motor]) velocity = (position - positions[motor]) / (now - timestamps[motor]);
             positions[motor] = position; timestamps[motor] = now;
-            return new AxisSample(motor, position, velocity, DateTime.Now);
+            return new AxisSample(motor, position, velocity, DateTime.Now) { TimeMs = MonotonicClock.NowMs };
         }
 
         public void ClearSamples() { positions.Clear(); timestamps.Clear(); }
@@ -80,17 +87,26 @@ namespace Operations_Control.Communication
             ValidateMotor(motor);
             if (speed <= 0 || speed > 15) throw new ArgumentOutOfRangeException("speed");
             Send("I" + motor + "22=" + speed.ToString(CultureInfo.InvariantCulture));
+            if (Math.Abs(ReadNumber("I" + motor + "22") - (double)speed) > 0.000001) throw new InvalidOperationException("速度写入后回读不一致。");
         }
 
         public void Jog(int motor, int direction, decimal speed, decimal? step)
+        { Jog(motor, direction, speed, step, delegate { return false; }); }
+        public void Jog(int motor, int direction, decimal speed, decimal? step, Func<bool> cancelled)
         {
+            if (cancelled()) return;
             SetSpeed(motor, speed);
+            if (cancelled()) return;
             Send("#" + motor + (step.HasValue ? "J^" + (step.Value * direction).ToString(CultureInfo.InvariantCulture) : direction > 0 ? "J+" : "J-"));
         }
 
         public void Move(int motor, decimal target, decimal speed)
+        { Move(motor, target, speed, delegate { return false; }); }
+        public void Move(int motor, decimal target, decimal speed, Func<bool> cancelled)
         {
+            if (cancelled()) return;
             SetSpeed(motor, speed);
+            if (cancelled()) return;
             Send("#" + motor + "J=" + target.ToString(CultureInfo.InvariantCulture));
         }
 
@@ -123,7 +139,12 @@ namespace Operations_Control.Communication
             Exception failure = null;
             foreach (int motor in new HashSet<int>(motors))
             {
-                try { ValidateMotor(motor); Send("#" + motor + "J/"); }
+                try
+                {
+                    ValidateMotor(motor); MotorStatus status = MotorStatus.Parse(Send("#" + motor + "?").Response);
+                    // J/ also enables the amplifier. Stopping must never re-enable a killed axis.
+                    if (status.Enabled) Send("#" + motor + (status.OpenLoop ? "K" : "J/"));
+                }
                 catch (Exception error) { failure = error; }
             }
             if (failure != null) throw failure;
@@ -157,6 +178,13 @@ namespace Operations_Control.Communication
         {
             double value;
             if (!Double.TryParse(Send("#" + motor + "P").Response.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value) || !PlanningOptions.Finite(value)) throw new FormatException("位置反馈无效。");
+            return value;
+        }
+        private double ReadNumber(string query)
+        {
+            double value;
+            if (!Double.TryParse(Send(query).Response.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value) || !PlanningOptions.Finite(value))
+                throw new FormatException("反馈无效：" + query);
             return value;
         }
         public double StartPlan(MotionPlan plan, double simulatorLagMs)
@@ -196,11 +224,17 @@ namespace Operations_Control.Communication
         }
         public void SetEnabled(int motor, bool enabled) { ValidateMotor(motor); Send("#" + motor + (enabled ? "J/" : "K")); }
         public void Home(int x, int y, bool both, int plc)
+        { Home(x, y, both, plc, delegate { return false; }); }
+        public void Home(int x, int y, bool both, int plc, Func<bool> cancelled)
         {
             ValidateMotor(x); ValidateMotor(y);
             if (plc < -1 || plc > 31) throw new ArgumentException("PLC 号为 0–31，-1 表示内置 HOME。");
+            if (cancelled()) return;
+            ControllerSnapshot current = ReadSnapshot(x, y, 0);
+            if (!current.Ready || !current.InPosition) throw new InvalidOperationException("回零前轴必须就绪并到位。");
+            if (cancelled()) return;
             if (plc >= 0) Send("ENABLE PLC " + plc);
-            else { Send("#" + x + "HM"); if (both) Send("#" + y + "HM"); }
+            else { Send("#" + x + "HM"); if (both && !cancelled()) Send("#" + y + "HM"); }
         }
         public void StopHome(int x, int y, int plc)
         {

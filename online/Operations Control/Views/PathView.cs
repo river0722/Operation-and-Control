@@ -35,6 +35,7 @@ namespace Operations_Control.Views
         private bool lastActivity;
         private int displayedSamples;
         private int generation;
+        private readonly Label readinessLabel = new Label { AutoSize = false, Width = 460, Height = 32, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(8, 3, 3, 3) };
         public bool IsExecuting { get { return workflow != null && workflow.IsExecuting; } }
         public bool IsBusy { get { return IsExecuting || computing; } }
         public event EventHandler ActivityChanged;
@@ -64,6 +65,7 @@ namespace Operations_Control.Views
             workflow.Configure(simulated, settings, mappingReady, x, y, selectedMotor);
             drawingCanvas = canvases.DrawingCanvas; actualCanvas = canvases.ActualCanvas;
             InitializeComponent();
+            actions.Controls.Add(readinessLabel);
             drawingCanvas.Settings = actualCanvas.Settings = mapping;
             hardwareConfirmed.Enabled = !simulation; lag.Enabled = simulation;
             drawing = drawingCanvas.GetPath();
@@ -134,6 +136,7 @@ namespace Operations_Control.Views
         }
         public void RefreshState() { UpdateButtons(); }
         public void CancelPendingWork() { Interlocked.Increment(ref generation); workflow.CancelPendingWork(); feedbackService.Clear(); pollTimer.Stop(); }
+        public void ResumePolling() { if (!IsDisposed) pollTimer.Start(); }
 
         public void LoadDrawing(DrawingPath path)
         {
@@ -166,6 +169,7 @@ namespace Operations_Control.Views
             planButton.Enabled = !locked && drawing.PointCount >= 2 && xMotor != yMotor;
             bool connected = session != null && session.IsConnected;
             runButton.Enabled = !locked && plan != null && connected && HardwareReady && Fresh && lastSample.Ready && lastSample.InPosition;
+            readinessLabel.Text = "运行条件：" + (locked ? "等待当前操作完成" : !connected ? "需连接设备" : plan == null ? "需生成规划" : !HardwareReady ? "请应用坐标并确认实机配置" : !Fresh ? "反馈过期／未知" : !lastSample.Ready ? "轴未就绪，请检查使能、故障与限位" : !lastSample.InPosition ? "等待轴停稳到位" : "已满足");
             saveProgramButton.Enabled = plan != null && !locked;
             analyzeButton.Enabled = exportButton.Enabled = !locked && run != null && run.Samples.Count > 0;
             enableButton.Enabled = disableButton.Enabled = !locked && connected && HardwareReady;

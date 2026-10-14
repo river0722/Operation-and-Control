@@ -25,6 +25,24 @@ namespace Operations_Control.Models
         public bool InPosition { get { return (SecondWord & 1) != 0; } }
         public bool Fault { get { return (SecondWord & 0x00196C) != 0 || (FirstWord & 0x004000) != 0; } }
         public bool FollowingWarning { get { return (SecondWord & 2) != 0; } }
+        public bool BlockingFault { get { return (SecondWord & 0x00016C) != 0 || (FirstWord & 0x004000) != 0; } }
+        public bool PositionLimitStopped { get { return (SecondWord & 0x001800) != 0; } }
+        public string FaultDescription
+        {
+            get
+            {
+                string text = String.Empty;
+                if ((SecondWord & 8) != 0) text += "驱动器报警；";
+                if ((SecondWord & 4) != 0) text += "跟随误差超限；";
+                if ((SecondWord & 0x20) != 0) text += "I²t 电流保护；";
+                if ((SecondWord & 0x40) != 0) text += "积分跟随误差保护；";
+                if ((SecondWord & 0x100) != 0) text += "相位搜索错误；";
+                if ((SecondWord & 0x1000) != 0) text += "期望位置软件限位停止；";
+                if ((FirstWord & 0x4000) != 0) text += "运动数据块准备不足；";
+                if ((SecondWord & 0x800) != 0) text += "位置限位停止；";
+                return text.Length == 0 ? "轴故障，检查状态字" : text.TrimEnd('；');
+            }
+        }
         public bool Ready { get { return Active && Enabled && !OpenLoop && !Fault && !NegativeLimit && !PositiveLimit; } }
         public static MotorStatus Parse(string text)
         {
@@ -35,9 +53,9 @@ namespace Operations_Control.Models
         }
         public override string ToString()
         {
-            return (Ready ? "闭环就绪" : Fault ? "故障" : !Enabled ? "未使能" : OpenLoop ? "开环" : "检查状态") +
+            return (Enabled ? "已使能" : "未使能") + (OpenLoop ? " / 开环" : " / 闭环") + (Fault ? " / " + FaultDescription : "") +
                 (PositiveLimit ? " / 正限位" : "") + (NegativeLimit ? " / 负限位" : "") +
-                (FollowingWarning ? " / 跟随误差预警" : "") + (Homing ? " / 寻零中" : HomeComplete ? " / 已寻零" : " / 未寻零") + (InPosition ? " / 到位" : " / 运动中");
+                (FollowingWarning ? " / 跟随误差预警" : "") + (Homing ? " / 寻零中" : HomeComplete ? " / 已寻零" : " / 未寻零") + (InPosition ? " / 到位" : Enabled ? " / 运动中" : " / 位置监测");
         }
     }
     public sealed class CoordinateStatus

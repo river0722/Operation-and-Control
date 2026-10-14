@@ -31,6 +31,10 @@ namespace Operations_Control.Models
         public double Position { get; private set; }
         public double? Velocity { get; private set; }
         public DateTime Timestamp { get; private set; }
+        public MotorStatus Status { get; set; }
+        public double? FollowingError { get; set; }
+        public double? CommandPosition { get { return FollowingError.HasValue ? (double?)(Position + FollowingError.Value) : null; } }
+        public double TimeMs { get; set; }
 
         public AxisSample(int motor, double position, double? velocity, DateTime timestamp)
         {

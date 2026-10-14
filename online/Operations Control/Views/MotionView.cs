@@ -10,6 +10,8 @@ namespace Operations_Control.Views
         public event EventHandler<JogRequestEventArgs> JogStarted;
         public event EventHandler JogReleased;
         private readonly Button[] jogButtons;
+        private bool holdingJog;
+        private readonly ToolTip reasons = new ToolTip { ShowAlways = true };
 
         public int XAxis { get { return (int)XMotor.SelectedItem; } }
         public int YAxis { get { return (int)YMotor.SelectedItem; } }
@@ -57,6 +59,7 @@ namespace Operations_Control.Views
 
         public void SetState(bool connected, bool busy, bool jogging)
         {
+            holdingJog = jogging;
             // Keep the held button enabled so mouse capture survives until release.
             foreach (Button button in jogButtons) button.Enabled = connected && (!busy || jogging);
             XMotor.Enabled = YMotor.Enabled = SelectedMotor.Enabled = connected && !busy && !jogging;
@@ -65,6 +68,29 @@ namespace Operations_Control.Views
             Target.Enabled = connected && !busy && !jogging;
             MoveButton.Enabled = ZeroButton.Enabled = ApplySpeedButton.Enabled = connected && !busy && !jogging;
             StopButton.Enabled = connected;
+        }
+        public void ApplyGuard(Operations_Control.Application.MotionGuard guard, ControllerFeedback feedback, bool fresh)
+        {
+            if (!fresh) { foreach (Button button in jogButtons) button.Enabled = false; MoveButton.Enabled = ZeroButton.Enabled = ApplySpeedButton.Enabled = false; stopHint.Text = "反馈未知／过期，等待有效数据"; return; }
+            if (holdingJog) return;
+            GuardButton(jogUpButton, guard, feedback, YAxis, 1);
+            GuardButton(jogDownButton, guard, feedback, YAxis, -1);
+            GuardButton(jogLeftButton, guard, feedback, XAxis, -1);
+            GuardButton(jogRightButton, guard, feedback, XAxis, 1);
+            AxisSample sample = feedback == null ? null : feedback.Find(Motor);
+            string reason = guard.Reason(sample, sample == null ? 0 : Math.Sign((double)Target.Value - sample.Position), (double)Target.Value, Speed.Value, true);
+            MoveButton.Enabled = MoveButton.Enabled && reason == null;
+            stopHint.Text = reason == null ? "停止作用于 X / Y 和所选电机" : "定位不可用：" + reason;
+            stopHint.ForeColor = reason == null ? System.Drawing.SystemColors.ControlText : System.Drawing.Color.Firebrick;
+            reasons.SetToolTip(MoveButton, reason ?? "绝对定位；等待实际到位确认");
+            ZeroButton.Enabled = ZeroButton.Enabled && sample != null && sample.Status != null && sample.Status.VelocityZero && sample.Status.InPosition;
+        }
+        private void GuardButton(Button button, Operations_Control.Application.MotionGuard guard, ControllerFeedback feedback, int motor, int direction)
+        {
+            AxisSample sample = feedback == null ? null : feedback.Find(motor);
+            double? target = SingleStep.Checked && sample != null ? (double?)(sample.Position + (double)Step.Value * direction) : null;
+            string reason = guard.Reason(sample, direction, target, Speed.Value, true);
+            button.Enabled = button.Enabled && reason == null; reasons.SetToolTip(button, reason ?? "按住点动，松开请求停止");
         }
     }
 }

@@ -4,11 +4,14 @@ namespace Operations_Control.Application
     public sealed class OperationState
     {
         public bool ManualBusy, ShuttingDown, Following, Computing;
-        public bool CommandBusy, Running, Homing, Stopping, StopFailed;
+        public bool CommandBusy, Running, Homing, Stopping, StopFailed, Verifying;
         public int? JoggingMotor;
-        public bool WorkflowExecuting { get { return CommandBusy || Running || Homing || Stopping || StopFailed; } }
+        public int? MovingMotor;
+        public bool ManualStopping, ManualStopFailed, FeedbackStale;
+        public bool WorkflowExecuting { get { return CommandBusy || Running || Homing || Stopping || StopFailed || Verifying; } }
         public bool WorkflowBusy { get { return WorkflowExecuting || Computing; } }
-        public bool ExternalBusy { get { return ManualBusy || ShuttingDown || Following || JoggingMotor.HasValue; } }
-        public bool CanPoll { get { return !ManualBusy && !ShuttingDown && !CommandBusy && !Stopping; } }
+        public bool ManualExecuting { get { return MovingMotor.HasValue || JoggingMotor.HasValue || ManualStopping || ManualStopFailed; } }
+        public bool ExternalBusy { get { return ManualBusy || ShuttingDown || Following || ManualExecuting; } }
+        public bool CanPoll { get { return !ManualBusy && !ShuttingDown && !CommandBusy; } }
     }
 }

@@ -26,7 +26,7 @@ namespace Operations_Control.Application
         public bool StatusError { get; private set; }
         public bool IsExecuting { get { return state.WorkflowExecuting; } }
         public bool IsBusy { get { return state.WorkflowBusy; } }
-        public bool Fresh { get { return LatestSnapshot != null && MonotonicClock.NowMs - LatestSnapshot.TimeMs <= 1000; } }
+        public bool Fresh { get { return !state.FeedbackStale && LatestSnapshot != null && MonotonicClock.NowMs - LatestSnapshot.TimeMs <= 1000; } }
         public bool HardwareReady(bool confirmed) { return simulation || (mappingReady && confirmed); }
         public event EventHandler StateChanged, StatusChanged, SnapshotChanged, HomeCompleted;
 
@@ -51,13 +51,30 @@ namespace Operations_Control.Application
         public void CancelPendingWork() { Interlocked.Increment(ref generation); }
         public void Poll()
         {
-            if (!disposed && state.CanPoll) feedback.Poll(xMotor, yMotor, selectedMotor, state.Running ? CurrentRun.Plan.Options.CoordinateSystem : 0);
+            if (disposed) return;
+            feedback.CheckTimeout(); CheckTimeout();
+            if (state.CanPoll) feedback.Poll(xMotor, yMotor, selectedMotor, (state.Running || (state.Stopping && planOwned)) && CurrentRun != null ? CurrentRun.Plan.Options.CoordinateSystem : 0);
         }
         private void Changed() { if (!disposed && StateChanged != null) StateChanged(this, EventArgs.Empty); }
         private void Report(string message, bool error)
         {
             StatusText = message; StatusError = error;
             if (!disposed && StatusChanged != null) StatusChanged(this, EventArgs.Empty);
+        }
+        private double stopAccepted = Double.PositiveInfinity, stopDeadline, stopSampleTime;
+        private ControllerSnapshot stopPrevious;
+        private string stoppingReason;
+        private bool requestedEnable;
+        private double enableAccepted, enableDeadline;
+        public void CheckTimeout()
+        {
+            if (state.Verifying && MonotonicClock.NowMs > enableDeadline) StopWithReason("使能状态确认超时，已请求停止。");
+            if (state.Stopping && MonotonicClock.NowMs > stopDeadline && !state.StopFailed)
+            {
+                state.StopFailed = true; Report("停稳确认超时，状态未知；请检查设备或重试停止。", true); Changed();
+                Action<Exception> completed = stopCompleted; stopCompleted = null;
+                if (completed != null) completed(new InvalidOperationException(StatusText));
+            }
         }
 
         public void StartExecution(double simulatorLagMs, bool confirmed)
@@ -88,6 +105,22 @@ namespace Operations_Control.Application
         {
             if (disposed) return;
             ControllerSnapshot sample = feedback.Latest.Snapshot; LatestSnapshot = sample;
+            if (state.Verifying && sample.TimeMs > enableAccepted && sample.XStatus.Enabled == requestedEnable && sample.YStatus.Enabled == requestedEnable &&
+                (!requestedEnable || (!sample.XStatus.OpenLoop && !sample.YStatus.OpenLoop && !sample.XStatus.BlockingFault && !sample.YStatus.BlockingFault)))
+            { state.Verifying = false; Report(requestedEnable ? "X/Y 已使能，反馈已确认。" : "X/Y 已去使能，反馈已确认。", false); }
+            if (state.Stopping && sample.TimeMs > stopAccepted && sample.TimeMs > stopSampleTime)
+            {
+                bool axesStopped = (!sample.XStatus.Enabled || (sample.XStatus.VelocityZero && sample.XStatus.InPosition)) &&
+                    (!sample.YStatus.Enabled || (sample.YStatus.VelocityZero && sample.YStatus.InPosition));
+                bool coordinateStopped = !planOwned || (sample.Coordinate != null && !sample.Coordinate.Running);
+                if (axesStopped && coordinateStopped && stopPrevious != null && Math.Abs(stopPrevious.XCounts - sample.XCounts) <= 0.1 && Math.Abs(stopPrevious.YCounts - sample.YCounts) <= 0.1)
+                {
+                    state.Stopping = state.StopFailed = false; activePlc = -1; planOwned = homeOwned = false;
+                    Report(stoppingReason + "；已停稳，轴反馈与坐标系状态已确认。", false);
+                    Action<Exception> completed = stopCompleted; stopCompleted = null; if (completed != null) completed(null);
+                }
+                stopPrevious = axesStopped && coordinateStopped ? sample : null; stopSampleTime = sample.TimeMs;
+            }
             if (state.Running)
             {
                 MotionPoint p = mapping.FromCounts(sample.XCounts, sample.YCounts);
@@ -108,7 +141,7 @@ namespace Operations_Control.Application
         private void FeedbackFailed(Exception error)
         {
             LatestSnapshot = null;
-            if (state.Running || state.Homing) StopWithReason("通信失败：" + error.Message);
+            if (state.Running || state.Homing || state.CommandBusy || state.Verifying) StopWithReason("通信失败：" + error.Message);
             else Report(error.Message, true);
             Changed();
         }
@@ -116,11 +149,23 @@ namespace Operations_Control.Application
         public void EnableAxes(bool enabled, bool confirmed)
         {
             if (disposed || IsBusy || state.ExternalBusy || !HardwareReady(confirmed) || !session.IsConnected) return;
+            if (!Fresh || (LatestSnapshot.XStatus.Enabled && (!LatestSnapshot.XStatus.VelocityZero || !LatestSnapshot.XStatus.InPosition)) || (LatestSnapshot.YStatus.Enabled && (!LatestSnapshot.YStatus.VelocityZero || !LatestSnapshot.YStatus.InPosition)))
+                throw new InvalidOperationException("使能/去使能前需要有效反馈并确认停稳。");
+            if (enabled && (LatestSnapshot.XStatus.BlockingFault || LatestSnapshot.YStatus.BlockingFault)) throw new InvalidOperationException("请先处理并复位轴故障。");
             state.CommandBusy = true; Plan = null; Changed(); int version = generation, x = xMotor, y = yMotor;
-            session.Execute(delegate { if (Thread.VolatileRead(ref generation) == version) { session.SetEnabled(x, enabled); session.SetEnabled(y, enabled); } }, delegate(Exception error)
+            session.Execute(delegate
+            {
+                if (Thread.VolatileRead(ref generation) != version) return;
+                ControllerSnapshot fresh = session.ReadSnapshot(x, y, 0);
+                if ((fresh.XStatus.Enabled && (!fresh.XStatus.VelocityZero || !fresh.XStatus.InPosition)) || (fresh.YStatus.Enabled && (!fresh.YStatus.VelocityZero || !fresh.YStatus.InPosition))) throw new InvalidOperationException("轴仍在运动或未到位。");
+                if (enabled && (fresh.XStatus.BlockingFault || fresh.YStatus.BlockingFault)) throw new InvalidOperationException("轴出现故障，请先处理并复位。");
+                if (Thread.VolatileRead(ref generation) != version) return;
+                session.SetEnabled(x, enabled); if (Thread.VolatileRead(ref generation) == version) session.SetEnabled(y, enabled);
+            }, delegate(Exception error)
             {
                 if (disposed || version != generation) return;
                 state.CommandBusy = false;
+                if (error == null) { state.Verifying = true; requestedEnable = enabled; enableAccepted = MonotonicClock.NowMs; enableDeadline = enableAccepted + 10000; }
                 Report(error == null ? enabled ? "已发送 X/Y 闭环使能，请查看状态。" : "已发送 X/Y 失能。" : error.Message, error != null); Changed();
             });
         }
@@ -134,7 +179,7 @@ namespace Operations_Control.Application
             homeBoth = target == 2; activePlc = plc; homeTimeout = timeoutSeconds * 1000; homeOwned = true;
             homeSawX = homeSawY = false; Plan = null; state.CommandBusy = true; int version = generation;
             Changed();
-            session.Execute(delegate { if (Thread.VolatileRead(ref generation) == version) session.Home(homeX, homeY, homeBoth, plc); }, delegate(Exception error)
+            session.Execute(delegate { if (Thread.VolatileRead(ref generation) == version) session.Home(homeX, homeY, homeBoth, plc, delegate { return Thread.VolatileRead(ref generation) != version; }); }, delegate(Exception error)
             {
                 if (disposed || version != generation) return;
                 state.CommandBusy = false;
@@ -162,11 +207,14 @@ namespace Operations_Control.Application
         public void Stop(Action<Exception> completed) { stopCompleted += completed; Stop(); }
         private void StopWithReason(string reason)
         {
-            if (state.Stopping || disposed) return;
+            if ((state.Stopping && !state.StopFailed) || disposed) return;
             CancelPendingWork(); bool wasHome = homeOwned, abortPlan = planOwned;
+            stoppingReason = reason;
             int plc = activePlc, x = xMotor, y = yMotor;
             int cs = CurrentRun != null && abortPlan ? CurrentRun.Plan.Options.CoordinateSystem : Plan == null ? 1 : Plan.Options.CoordinateSystem;
-            state.Running = false; state.Homing = false; state.Stopping = true;
+            state.Running = false; state.Homing = false; state.Verifying = false; state.Stopping = true;
+            state.StopFailed = false; stopPrevious = null; stopSampleTime = 0;
+            stopAccepted = Double.PositiveInfinity; stopDeadline = MonotonicClock.NowMs + 10000;
             if (CurrentRun != null && !CurrentRun.Completed) CurrentRun.Result = reason;
             Changed();
             session.Execute(delegate
@@ -178,12 +226,12 @@ namespace Operations_Control.Application
             }, delegate(Exception error)
             {
                 if (disposed) return;
-                state.Stopping = false; state.CommandBusy = false;
+                state.CommandBusy = false;
                 state.StopFailed = error != null;
-                if (error == null) { activePlc = -1; planOwned = false; homeOwned = false; }
-                Report(error == null ? reason + "；停止指令已接受。" : reason + "；停止失败：" + error.Message, error != null);
-                Changed(); Action<Exception> completed = stopCompleted; stopCompleted = null;
-                if (completed != null) completed(error);
+                if (error == null) stopAccepted = MonotonicClock.NowMs;
+                Report(error == null ? reason + "；停止指令已接受，等待实际停稳。" : reason + "；停止失败：" + error.Message, error != null);
+                Changed();
+                if (error != null) { Action<Exception> completed = stopCompleted; stopCompleted = null; if (completed != null) completed(error); }
             });
         }
 

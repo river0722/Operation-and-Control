@@ -44,10 +44,16 @@ internal static class ModuleTests
         public bool Connect(bool simulation, int ownerWindow) { return IsConnected = true; }
         public void Disconnect() { IsConnected = false; Commands.Add("disconnect"); }
         public void ClearSamples() { }
-        public CommandResult Send(string command) { Commands.Add(command); return new CommandResult("", 0); }
+        public CommandResult Send(string command)
+        {
+            Commands.Add(command);
+            return new CommandResult(command.EndsWith("P") ? "0" : command.EndsWith("?") ? "882000000401" : "", 0);
+        }
         public void SetSpeed(int motor, decimal speed) { }
         public void Jog(int motor, int direction, decimal speed, decimal? step) { Commands.Add("jog"); }
+        public void Jog(int motor, int direction, decimal speed, decimal? step, Func<bool> cancelled) { if (!cancelled()) Jog(motor, direction, speed, step); }
         public void Move(int motor, decimal target, decimal speed) { }
+        public void Move(int motor, decimal target, decimal speed, Func<bool> cancelled) { if (!cancelled()) Move(motor, target, speed); }
         public void MovePair(int x, int y, MotionPoint point) { Commands.Add("follow"); }
         public void ZeroPosition(int motor) { }
         public void Stop(IEnumerable<int> motors) { Commands.Add("stop"); if (FailStop) throw new InvalidOperationException("stop failed"); }
@@ -57,8 +63,9 @@ internal static class ModuleTests
         {
             ReadCalls++; if (FailRead) throw new InvalidOperationException("read failed");
             return new ControllerFeedback(Snapshot, new AxisSample[] {
-                new AxisSample(x, Snapshot.XCounts, null, DateTime.Now), new AxisSample(y, Snapshot.YCounts, null, DateTime.Now),
-                new AxisSample(selectedMotor, 0, null, DateTime.Now) });
+                new AxisSample(x, Snapshot.XCounts, null, DateTime.Now) { Status = Snapshot.XStatus, TimeMs = Snapshot.TimeMs },
+                new AxisSample(y, Snapshot.YCounts, null, DateTime.Now) { Status = Snapshot.YStatus, TimeMs = Snapshot.TimeMs },
+                new AxisSample(selectedMotor, 0, null, DateTime.Now) { Status = Snapshot.XStatus, TimeMs = Snapshot.TimeMs } });
         }
         public double StartPlan(MotionPlan plan, double lag, Func<bool> cancelled)
         {
@@ -69,6 +76,7 @@ internal static class ModuleTests
         public void StopPlan(int cs, int x, int y) { CoordinateSystem = cs; StopPlanCalls++; Stop(new int[] { x, y }); }
         public void SetEnabled(int motor, bool enabled) { }
         public void Home(int x, int y, bool both, int plc) { Commands.Add("home"); }
+        public void Home(int x, int y, bool both, int plc, Func<bool> cancelled) { if (!cancelled()) Home(x, y, both, plc); }
         public void StopHome(int x, int y, int plc) { StopHomeCalls++; Stop(new int[] { x, y }); }
         public void Dispose() { }
     }
@@ -131,13 +139,21 @@ internal static class ModuleTests
             Check(session.StopPlanCalls == 1 && flow.LatestSnapshot == null && flow.CurrentRun.Result.Contains("通信失败"), "Read failure cancels a running plan");
         }
     }
+    private static void ConfirmStopped(MotionWorkflow flow, FakeSession session)
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            Thread.Sleep(2); session.Snapshot = Sample(session.Snapshot.XCounts, session.Snapshot.YCounts, 0, true, false);
+            flow.Poll(); session.Flush();
+        }
+    }
     private static void Cancellation()
     {
         FakeSession session = new FakeSession(); OperationState state = new OperationState();
         using (FeedbackService feedback = new FeedbackService(session))
         using (MotionWorkflow flow = Workflow(session, state, feedback))
         {
-            flow.StartExecution(0, false); flow.Stop(); session.Flush();
+            flow.StartExecution(0, false); flow.Stop(); session.Flush(); ConfirmStopped(flow, session);
             Check(session.StartCalls == 0 && session.StopPlanCalls == 1 && !flow.IsExecuting, "Queued start cancellation preserves start-stop ordering");
             Check(!flow.CurrentRun.Completed, "Cancelled start never marks a run complete");
         }
@@ -146,7 +162,7 @@ internal static class ModuleTests
         using (MotionWorkflow flow = Workflow(session, state, feedback))
         {
             session.DuringStart = delegate { flow.Stop(); };
-            flow.StartExecution(0, false); session.Flush();
+            flow.StartExecution(0, false); session.Flush(); ConfirmStopped(flow, session);
             Check(session.StartCalls == 0 && session.StopPlanCalls == 1 && !state.Running, "Cancellation during startup suppresses a late successful callback");
         }
         session = new FakeSession(); state = new OperationState();
@@ -157,7 +173,7 @@ internal static class ModuleTests
             flow.Stop(); session.Flush();
             Check(flow.IsExecuting && state.StopFailed, "Failed stop keeps operation ownership and competing controls locked");
             flow.StartExecution(0, false); Check(session.StartCalls == 1, "Failed stop cannot launch another plan");
-            session.FailStop = false; flow.Stop(); session.Flush();
+            session.FailStop = false; flow.Stop(); session.Flush(); ConfirmStopped(flow, session);
             Check(session.StopPlanCalls == 2 && !flow.IsExecuting, "Retry stops the original plan and releases ownership");
         }
     }
@@ -175,9 +191,9 @@ internal static class ModuleTests
             Check(completed == 1 && !flow.IsExecuting, "Both axes must transition through the new home and arrive");
             flow.StartHoming(0, -1, 0.001, false); session.Flush(); Thread.Sleep(10);
             flow.Poll(); session.Flush();
-            Check(session.StopHomeCalls == 1 && flow.StatusText.Contains("回零超时"), "Home timeout requests the correct controller stop");
+            Check(session.StopHomeCalls == 1 && flow.StatusText.Contains("回零超时"), "Home timeout requests the correct controller stop"); ConfirmStopped(flow, session);
             flow.StartHoming(0, -1, 10, false); session.Flush(); session.FailStop = true;
-            flow.Stop(); session.Flush(); session.FailStop = false; flow.Stop(); session.Flush();
+            flow.Stop(); session.Flush(); session.FailStop = false; flow.Stop(); session.Flush(); ConfirmStopped(flow, session);
             Check(session.StopHomeCalls == 3 && !flow.IsExecuting, "Failed built-in home stop retains ownership for retry");
         }
     }
@@ -197,10 +213,12 @@ internal static class ModuleTests
             Check(feedback.Latest.Axes[0].Motor == 2 && deliveries == 2, "New context resumes after old query finishes");
         }
         session = new FakeSession(); OperationState state = new OperationState();
-        ManualMotionService manual = new ManualMotionService(session, state);
+        FeedbackService manualFeedback = new FeedbackService(session); manualFeedback.Poll(1, 2, 1, 0); session.Flush();
+        MotionGuard guard = new MotionGuard { MappingReady = true };
+        ManualMotionService manual = new ManualMotionService(session, state, manualFeedback, guard);
         Check(manual.StartJog(1, 1, 1, null, null), "Manual service accepts idle jogging");
         manual.StopJog(null); session.Flush();
-        Check(session.Commands.Count == 2 && session.Commands[0] == "jog" && session.Commands[1] == "stop", "Fast press/release queues jog then stop");
+        Check(session.Commands.IndexOf("jog") >= 0 && session.Commands.IndexOf("stop") > session.Commands.IndexOf("jog"), "Fast press/release queues jog then stop");
         state.Running = true; Check(!manual.StartJog(1, 1, 1, null, null), "Trajectory ownership blocks manual jogging"); state.Running = false;
         session.FailStop = true; Exception stopFailure = null;
         manual.Disconnect(new int[] { 1, 2 }, delegate(Exception stopped, Exception error) { stopFailure = stopped; }); session.Flush();
