@@ -25,15 +25,15 @@ namespace Operations_Control.Communication
                 text.AppendLine(block.Transfer ? "; TRANSFER to next stroke (no tool control)" : "; DRAW stroke");
                 if (o.Mode == InterpolationMode.Spline && !block.Transfer)
                 {
-                    text.AppendLine("SPLINE1 TM" + N(block.SplineTimeMs));
+                    text.AppendLine("SPLINE1 TM " + N(block.SplineTimeMs));
                     for (int i = 1; i < block.Points.Count; i++) text.AppendLine("X" + N(block.Points[i].X) + " Y" + N(block.Points[i].Y));
                 }
                 else foreach (MotionSegment s in block.Segments)
                 {
-                    text.AppendLine("PVT" + N(s.DurationMs));
+                    text.AppendLine("PVT " + N(s.DurationMs));
                     text.AppendLine("X" + N(s.End.X) + ":" + N(s.EndVelocity.X) + " Y" + N(s.End.Y) + ":" + N(s.EndVelocity.Y));
                 }
-                text.AppendLine("DWELL0");
+                text.AppendLine("DWELL 0");
             }
             text.AppendLine("CLOSE"); return text.ToString();
         }

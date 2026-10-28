@@ -10,23 +10,26 @@ namespace Operations_Control.Views
 
         public void Display(AxisSample[] samples)
         {
+            ShowSelected(samples[2].Motor != samples[0].Motor && samples[2].Motor != samples[1].Motor);
             xReadout.Display("X 轴位置", samples[0]);
             yReadout.Display("Y 轴位置", samples[1]);
             selectedReadout.Display("所选电机", samples[2]);
-            freshness.Text = "更新 " + samples[0].Timestamp.ToString("HH:mm:ss.fff") + " · 100 ms 轮询 · 速度由位置差估算";
         }
 
         public void Clear(int x, int y, int selected)
         {
+            ShowSelected(selected != x && selected != y);
             xReadout.Clear("X 轴位置 / 电机 " + x);
             yReadout.Clear("Y 轴位置 / 电机 " + y);
             selectedReadout.Clear("所选电机 / 电机 " + selected);
-            freshness.Text = "数据未就绪 · 100 ms 轮询 · 速度由位置差估算";
+        }
+        private void ShowSelected(bool visible)
+        {
+            selectedReadout.Visible = visible;
+            readoutsLayout.RowStyles[2].Height = visible ? 36F : 0F;
         }
         public void ShowAge(double age, bool fresh)
         {
-            freshness.Text = fresh ? "反馈年龄 " + age.ToString("0") + " ms · 速度由位置差估算" : "反馈过期／未知 · 禁止运动";
-            freshness.ForeColor = fresh ? System.Drawing.SystemColors.ControlText : System.Drawing.Color.Firebrick;
             if (!fresh) { xReadout.Clear("X：数据过期"); yReadout.Clear("Y：数据过期"); selectedReadout.Clear("所选轴：数据过期"); }
         }
     }

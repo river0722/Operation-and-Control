@@ -11,6 +11,7 @@ using Operations_Control.Application;
 using Operations_Control.Communication;
 using Operations_Control.Files;
 using Operations_Control.Models;
+using Operations_Control.Motion;
 using Operations_Control.Views;
 
 internal static class MotorDebugTests
@@ -30,7 +31,9 @@ internal static class MotorDebugTests
         public readonly AxisSample[] Axes = new AxisSample[3];
         public readonly List<string> Commands = new List<string>();
         public bool StopImmediately = true, FailStop;
-        public int Reads;
+        public bool FailDisable, IgnoreDisable, IgnoreAbort, CoordinateRunning, IgnoreParameterWrite;
+        public readonly Dictionary<string, string> Parameters = new Dictionary<string, string>();
+        public int Reads, AxisReads;
         public bool IsConnected { get; private set; }
         public string DeviceName { get { return "fake"; } }
         public Fake()
@@ -47,6 +50,13 @@ internal static class MotorDebugTests
         {
             if (command.StartsWith("SIMRESET")) { int reset = command[8] - '0'; Set(reset, Axes[reset - 1].Position, Status(true, false, false, false, false)); return new CommandResult("", 0); }
             Commands.Add(command); int motor = command.Length > 1 && command[0] == '#' ? command[1] - '0' : 1;
+            if (command.StartsWith("&") && command.EndsWith("A")) { if (!IgnoreAbort) CoordinateRunning = false; return new CommandResult("", 0); }
+            if (command.StartsWith("I"))
+            {
+                int assignment = command.IndexOf('=');
+                if (assignment > 0) { if (!IgnoreParameterWrite) Parameters[command.Substring(0, assignment)] = command.Substring(assignment + 1); return new CommandResult("", 0); }
+                return new CommandResult(Parameters[command], 0);
+            }
             AxisSample axis = Axes[motor - 1]; string response = command.EndsWith("P") ? axis.Position.ToString(CultureInfo.InvariantCulture) :
                 command.EndsWith("?") ? axis.Status.FirstWord.ToString("X6") + axis.Status.SecondWord.ToString("X6") : "0";
             return new CommandResult(response, 0);
@@ -55,16 +65,20 @@ internal static class MotorDebugTests
         public void Jog(int motor, int direction, decimal speed, decimal? step)
         { Commands.Add("jog" + motor); Set(motor, Axes[motor - 1].Position, Status(false, true, false, false, false)); }
         public void Jog(int motor, int direction, decimal speed, decimal? step, Func<bool> cancelled) { if (!cancelled()) Jog(motor, direction, speed, step); }
+        public void Jog(int motor, int direction, decimal speed, decimal? step, decimal acceleration) { Jog(motor, direction, speed, step); }
+        public void Jog(int motor, int direction, decimal speed, decimal? step, decimal acceleration, Func<bool> cancelled) { if (!cancelled()) Jog(motor, direction, speed, step, acceleration); }
         public void Move(int motor, decimal target, decimal speed)
         { Commands.Add("move" + motor); Set(motor, Axes[motor - 1].Position, Status(false, true, false, false, false)); }
         public void Move(int motor, decimal target, decimal speed, Func<bool> cancelled) { if (!cancelled()) Move(motor, target, speed); }
+        public void Move(int motor, decimal target, decimal speed, decimal acceleration) { Move(motor, target, speed); }
+        public void Move(int motor, decimal target, decimal speed, decimal acceleration, Func<bool> cancelled) { if (!cancelled()) Move(motor, target, speed, acceleration); }
         public void MovePair(int x, int y, MotionPoint point) { }
         public void ZeroPosition(int motor) { Commands.Add("zero" + motor); Set(motor, 0, Status(true, true, false, false, false)); }
         public void Stop(IEnumerable<int> motors)
         { Commands.Add("stop"); if (FailStop) throw new InvalidOperationException("stop failed"); foreach (int motor in motors) if (StopImmediately) Set(motor, Axes[motor - 1].Position, Status(true, true, false, false, false)); }
         public void Download(string path) { }
         public ControllerSnapshot ReadSnapshot(int x, int y, int cs)
-        { double now = MonotonicClock.NowMs; return new ControllerSnapshot { XCounts = Axes[x - 1].Position, YCounts = Axes[y - 1].Position, XStatus = Axes[x - 1].Status, YStatus = Axes[y - 1].Status, XTimeMs = now, YTimeMs = now, Coordinate = new CoordinateStatus { SecondWord = 0x20000 } }; }
+        { double now = MonotonicClock.NowMs; return new ControllerSnapshot { XCounts = Axes[x - 1].Position, YCounts = Axes[y - 1].Position, XStatus = Axes[x - 1].Status, YStatus = Axes[y - 1].Status, XTimeMs = now, YTimeMs = now, Coordinate = new CoordinateStatus { FirstWord = CoordinateRunning ? 1 : 0, SecondWord = CoordinateRunning ? 0 : 0x20000 } }; }
         public ControllerFeedback ReadFeedback(int x, int y, int selected, int cs)
         {
             Reads++; ControllerSnapshot snapshot = ReadSnapshot(x, y, cs); List<AxisSample> samples = new List<AxisSample>();
@@ -72,9 +86,22 @@ internal static class MotorDebugTests
             { AxisSample source = Axes[motor - 1]; samples.Add(new AxisSample(motor, source.Position, 0, DateTime.Now) { Status = source.Status, FollowingError = source.FollowingError, TimeMs = snapshot.TimeMs }); }
             return new ControllerFeedback(snapshot, samples.ToArray());
         }
-        public double StartPlan(MotionPlan plan, double lag, Func<bool> cancelled) { return MonotonicClock.NowMs; }
+        public AxisSample ReadAxisFeedback(int motor)
+        {
+            AxisReads++;
+            AxisSample source = Axes[motor - 1];
+            return new AxisSample(motor, source.Position, source.Velocity, DateTime.Now)
+            { Status = source.Status, FollowingError = source.FollowingError, TimeMs = MonotonicClock.NowMs };
+        }
+        public double StartPlan(MotionPlan plan, double lag, Func<bool> cancelled) { CoordinateRunning = true; return MonotonicClock.NowMs; }
         public void StopPlan(int cs, int x, int y) { Stop(new int[] { x, y }); }
-        public void SetEnabled(int motor, bool enabled) { Commands.Add(enabled ? "enable" : "disable"); Set(motor, Axes[motor - 1].Position, Status(true, enabled, false, false, false)); }
+        public void SetEnabled(int motor, bool enabled)
+        {
+            Commands.Add(enabled ? "enable" : "disable");
+            if (!enabled && FailDisable) throw new InvalidOperationException("disable failed");
+            if (!enabled && IgnoreDisable) return;
+            Set(motor, Axes[motor - 1].Position, Status(true, enabled, false, false, false));
+        }
         public void Home(int x, int y, bool both, int plc) { }
         public void Home(int x, int y, bool both, int plc, Func<bool> cancelled) { if (!cancelled()) Home(x, y, both, plc); }
         public void StopHome(int x, int y, int plc) { Stop(new int[] { x, y }); }
@@ -148,6 +175,154 @@ internal static class MotorDebugTests
             Check(!state.ManualExecuting, "Stop retry waits for stable actual feedback");
         }
     }
+    private static void FocusedFeedback()
+    {
+        Fake fake = new Fake(); OperationState state = new OperationState();
+        using (FeedbackService feedback = new FeedbackService(fake))
+        {
+            ManualMotionService manual = new ManualMotionService(fake, state, feedback, Guard());
+            Refresh(fake, feedback, null); double xyTime = feedback.Latest.Snapshot.TimeMs;
+            int fullReads = fake.Reads;
+            Check(manual.Move(3, 10, 1), "Third axis move starts with guarded feedback"); fake.Flush(); manual.Tick();
+            Check(fake.AxisReads > 0 && fake.Reads == fullReads && state.ManualExecuting,
+                "Acceptance requests focused feedback immediately without waiting for a UI timer or accepting the old arrival bit");
+            MotorStatus notArrived = Status(true, true, false, false, false); notArrived.SecondWord &= ~1;
+            fake.Set(3, 10, notArrived); Thread.Sleep(2); feedback.Poll(1, 2, 3, 0, 3); fake.Flush(); manual.Tick();
+            Check(state.ManualExecuting && feedback.Latest.Find(3).Position == 10,
+                "Focused position at target cannot complete a move while PMAC InPosition is false");
+            fake.Set(3, 11, Status(true, true, false, false, false)); Thread.Sleep(2); feedback.PollNow(3); fake.Flush(); manual.Tick();
+            Check(state.ManualExecuting, "PMAC arrival cannot bypass the software target tolerance");
+            string timing = null; manual.TimingRecorded += delegate(string text) { timing = text; };
+            fake.Set(3, 10, Status(true, true, false, false, false)); Thread.Sleep(2); feedback.PollNow(3); fake.Flush(); manual.Tick();
+            Check(!state.ManualExecuting && feedback.Fresh && feedback.Latest.Snapshot.TimeMs == xyTime,
+                "Third axis completion uses its own fresh position while preserving X/Y timestamps");
+            Check(manual.LastTiming.AcceptedAtMs.HasValue && manual.LastTiming.FirstFeedbackAtMs.HasValue &&
+                manual.LastTiming.FinishedAtMs.HasValue && timing != null && timing.Contains("实时检查"),
+                "Completed movement records queue, command, feedback and confirmation timing");
+            fake.Set(2, 42, Status(true, true, false, false, false));
+            Thread.Sleep(260); feedback.PollNow(3); fake.Flush();
+            Check(fake.Reads > fullReads && feedback.Latest.Find(2).Position == 42,
+                "Background complete reads continue to refresh other axes during focused monitoring");
+            int axisReads = fake.AxisReads; feedback.PollNow(3); feedback.Clear(); fake.Flush();
+            Check(feedback.Latest == null && fake.AxisReads == axisReads, "Context reset discards a queued focused read safely");
+        }
+        fake = new Fake(); state = new OperationState();
+        using (FeedbackService feedback = new FeedbackService(fake))
+        {
+            ManualMotionService manual = new ManualMotionService(fake, state, feedback, Guard()); Refresh(fake, feedback, null);
+            double xyTime = feedback.Latest.Snapshot.TimeMs;
+            manual.StartJog(3, 1, 1, null, null); fake.Flush(); manual.Tick(); Thread.Sleep(2);
+            manual.StopJog(null); fake.Flush(); manual.Tick();
+            Check(state.ManualStopping && state.ManualFeedbackMotor == 3, "Single-axis jog stop retains focused feedback ownership and requires a position baseline");
+            Thread.Sleep(2); feedback.PollNow(3); fake.Flush(); manual.Tick();
+            Check(!state.ManualExecuting && feedback.Latest.Snapshot.TimeMs == xyTime,
+                "Two new stable third-axis samples confirm stopping without a new X/Y snapshot");
+        }
+        fake = new Fake();
+        using (FeedbackService feedback = new FeedbackService(fake))
+        {
+            feedback.Poll(1, 2, 1, 0); fake.Flush(); fake.Set(1, 7, Status(true, true, false, false, false));
+            feedback.PollNow(1); fake.Flush();
+            Check(feedback.Latest.Axes[0] == feedback.Latest.Axes[2] && feedback.Latest.Snapshot.XCounts == 7,
+                "Focused X update replaces both aliases when the selected axis is also X");
+            feedback.Poll(1, 2, 1, 9, 1); fake.Flush(); int reads = fake.Reads;
+            feedback.Poll(1, 2, 1, 9, 1); fake.Flush();
+            Check(fake.Reads == reads + 1, "Coordinate program monitoring always reads the complete snapshot");
+        }
+        fake = new Fake(); state = new OperationState();
+        using (FeedbackService feedback = new FeedbackService(fake))
+        {
+            ManualMotionService manual = new ManualMotionService(fake, state, feedback, Guard()); Refresh(fake, feedback, null);
+            manual.Move(3, 10, 1); fake.Set(3, 0, Status(true, true, true, false, false)); fake.Flush();
+            Check(!fake.Commands.Contains("move3") && fake.Commands.Contains("stop"),
+                "A new fault between button press and command execution is caught by the real-time preflight read");
+        }
+    }
+    private static void Recovery()
+    {
+        Fake fake = new Fake(); OperationState state = new OperationState(); MotionGuard guard = Guard();
+        using (FeedbackService feedback = new FeedbackService(fake))
+        {
+            ManualMotionService manual = new ManualMotionService(fake, state, feedback, guard);
+            MotorStatus stalled = MotorStatus.Parse("892000070400"); fake.Set(1, 0, stalled);
+            Check(stalled.ToString().Contains("指令已停止，未到位"), "A stalled hold is not labelled as movement");
+            Refresh(fake, feedback, null); Reject(delegate { manual.Move(1, 100, 1); }, "Recovery never bypasses normal arrival guards");
+            state.ManualStopping = state.ManualStopFailed = state.FeedbackStale = true; feedback.Clear();
+            bool completed = false;
+            Check(manual.CanRecover && manual.Recover(new int[] { 1, 2, 3 }, null, null, delegate { completed = true; }), "Unknown or not-in-position feedback does not lock out recovery");
+            Check(!manual.CanRecover && !manual.Move(1, 10, 1), "Recovery serializes against further actions");
+            fake.Flush(); Check(state.ManualExecuting && !completed, "Command acknowledgement alone does not release waiting");
+            Refresh(fake, feedback, manual); Check(state.ManualExecuting, "Recovery needs more than one new sample");
+            fake.Set(1, 2, Status(true, false, false, false, false)); Refresh(fake, feedback, manual);
+            Check(state.ManualExecuting, "Changing feedback keeps recovery pending even when disabled");
+            Refresh(fake, feedback, manual);
+            Check(completed && !state.ManualExecuting && !fake.Axes[0].Status.Enabled && !fake.Axes[1].Status.Enabled && !fake.Axes[2].Status.Enabled, "Stable disabled feedback releases all monitored axes without InPosition");
+            Check(!fake.Commands.Contains("enable") && !fake.Commands.Contains("zero1"), "Recovery does not enable, zero, or resume a target");
+            fake.FailDisable = true;
+            Check(manual.Recover(new int[] { 1, 2, 3 }, null, null, null), "Recovery may be requested again"); fake.Flush();
+            Check(state.ManualStopFailed && state.ManualExecuting && manual.CanRecover, "A failed disable remains blocked but retry is available");
+            Refresh(fake, feedback, manual); Refresh(fake, feedback, manual);
+            Check(state.ManualExecuting, "Old disabled feedback cannot mask a command failure");
+            fake.FailDisable = false; manual.Recover(new int[] { 1, 2, 3 }, null, null, null); fake.Flush();
+            Refresh(fake, feedback, manual); Refresh(fake, feedback, manual); Check(!state.ManualExecuting, "A successful retry clears the failed recovery");
+            fake.Set(1, 2, stalled); fake.IgnoreDisable = true;
+            manual.Recover(new int[] { 1, 2 }, null, null, null); fake.Flush(); Refresh(fake, feedback, manual); Refresh(fake, feedback, manual);
+            Check(state.ManualExecuting, "A controller that remains enabled cannot unlock the UI");
+            typeof(ManualMotionService).GetField("deadline", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(manual, MonotonicClock.NowMs - 1);
+            manual.Tick(); Check(state.ManualStopFailed && manual.StatusText.Contains("5 秒") && manual.CanRecover, "Recovery timeout is explicit and retryable");
+        }
+    }
+    private static void WorkflowRecovery()
+    {
+        Fake fake = new Fake(); OperationState state = new OperationState();
+        using (FeedbackService feedback = new FeedbackService(fake))
+        using (MotionWorkflow flow = new MotionWorkflow(fake, state, feedback))
+        {
+            flow.Configure(true, CanvasSettings.Default, true, 1, 2, 3); flow.Poll(); fake.Flush();
+            flow.Plan = MotionPlanningService.Build(PathGeometry.Line(0, 0, 1, 1), new PlanningOptions { CoordinateSystem = 9, Mapping = CanvasSettings.Default }, new MotionPoint(0, 0));
+            flow.StartExecution(0, true); fake.Flush(); Check(state.Running, "Recovery fixture has an owned coordinate program");
+            ManualMotionService manual = new ManualMotionService(fake, state, feedback, Guard());
+            fake.IgnoreAbort = true; flow.Stop();
+            Check(manual.Recover(new int[] { 1, 2, 3 }, flow.PrepareRecovery, delegate { return flow.RecoveryReady; }, flow.CompleteRecovery), "Recovery can replace an owned workflow stop wait"); fake.Flush();
+            for (int i = 0; i < 3; i++) { Thread.Sleep(2); flow.Poll(); fake.Flush(); manual.Tick(); }
+            Check(fake.Commands.Contains("&9A") && state.ManualExecuting && state.Stopping, "Disabled axes still require an owned coordinate system to stop");
+            fake.CoordinateRunning = false; Thread.Sleep(2); flow.Poll(); fake.Flush(); manual.Tick();
+            Check(!state.ManualExecuting && !state.WorkflowBusy && !flow.CurrentRun.Completed && flow.CurrentRun.Result.Contains("解除等待"), "Confirmed coordinate stop releases ownership without completing or resuming the run");
+        }
+    }
+    private static Fake PulseController()
+    {
+        Fake fake = new Fake(); fake.Set(1, 0, Status(true, false, false, false, false));
+        foreach (string pair in new string[] { "I101=0", "I124=$120001", "I125=$78000", "I7016=3", "I7010=8", "I103=$3515", "I104=$3515", "I8020=$78000", "I102=$78002" })
+        { int equals = pair.IndexOf('='); fake.Parameters.Add(pair.Substring(0, equals), pair.Substring(equals + 1)); }
+        return fake;
+    }
+    private static void PulseRepair()
+    {
+        Fake fake = PulseController(); PulseOutputRepair repair = new PulseOutputRepair(fake);
+        PulseOutputConfiguration candidate = repair.Inspect(1);
+        Check(candidate.NeedsRepair && candidate.ExpectedAddress == 0x78004, "Live incident routing is diagnosed from mode and feedback");
+        string result = repair.Repair(candidate);
+        Check(fake.Parameters["I102"] == "$078004" && !fake.Axes[0].Status.Enabled && result.Contains("回读"), "Repair changes only the verified output address and leaves outputs disabled");
+        Check(fake.Commands.FindAll(delegate(string command) { return command.Contains("="); }).Count == 1 && !fake.Commands.Contains("SAVE") && !fake.Commands.Contains("enable"), "Repair never changes tolerances, enables, or persists parameters");
+        Check(!repair.Inspect(1).NeedsRepair, "Correct output routing is a no-op");
+        fake = PulseController(); repair = new PulseOutputRepair(fake); fake.Set(1, 0, Status(true, true, false, false, false));
+        Reject(delegate { repair.Inspect(1); }, "An enabled motor must not have its output rerouted");
+        fake = PulseController(); repair = new PulseOutputRepair(fake); candidate = repair.Inspect(1); fake.Set(1, 0, Status(true, true, false, false, false));
+        Reject(delegate { repair.Repair(candidate); }, "Enabled state is rechecked after user confirmation");
+        fake = PulseController(); repair = new PulseOutputRepair(fake); candidate = repair.Inspect(1); fake.Parameters["I7016"] = "2";
+        Reject(delegate { repair.Repair(candidate); }, "Changed configuration cannot reuse approval for an old candidate");
+        fake = PulseController(); repair = new PulseOutputRepair(fake); fake.Parameters["I7010"] = "7";
+        Reject(delegate { repair.Inspect(1); }, "External encoder axes are not auto-converted to pulse mode");
+        fake = PulseController(); repair = new PulseOutputRepair(fake); fake.Parameters["I8020"] = "$78008";
+        Reject(delegate { repair.Inspect(1); }, "A mismatched feedback source blocks automatic routing repair");
+        fake = PulseController(); repair = new PulseOutputRepair(fake); candidate = repair.Inspect(1); fake.IgnoreParameterWrite = true;
+        Reject(delegate { repair.Repair(candidate); }, "Write acknowledgement without matching readback is a failure");
+        fake = PulseController(); repair = new PulseOutputRepair(fake);
+        fake.Parameters["I125"] = "$78008"; fake.Parameters["I103"] = fake.Parameters["I104"] = "$3518";
+        fake.Parameters["I8023"] = "$78008"; fake.Parameters["I7026"] = "3"; fake.Parameters["I7020"] = "8"; fake.Parameters["I102"] = "$7800A";
+        Check(repair.Inspect(1).ExpectedAddress == 0x7800C, "Physical channel mapping is independent of motor number");
+    }
     private static void TimeoutAndAlarms()
     {
         Fake fake = new Fake(); using (FeedbackService feedback = new FeedbackService(fake))
@@ -160,6 +335,17 @@ internal static class MotorDebugTests
             alarms.Acknowledge(); Check(alarms.ActiveCount == 1 && alarms.History[0].Active && alarms.History[0].Acknowledged, "Acknowledgement cannot clear a fault");
             fake.Set(3, 0, Status(true, true, false, false, false)); Refresh(fake, feedback, null); alarms.Update(feedback.Latest);
             Check(alarms.ActiveCount == 0 && !alarms.History[0].Active && alarms.History[0].Recovered != DateTime.MinValue, "Only device recovery clears the active alarm");
+        }
+        Fake startupFake = new Fake(); using (FeedbackService feedback = new FeedbackService(startupFake))
+        {
+            int failures = 0; feedback.Failed += delegate { failures++; };
+            Refresh(startupFake, feedback, null); Check(feedback.Fresh, "Initial feedback is fresh before path startup");
+            feedback.PauseTimeoutForCommand(); Thread.Sleep(1100); feedback.CheckTimeout();
+            Check(failures == 0 && feedback.Fresh, "Expected path-start communication does not expire the last snapshot");
+            feedback.ResumeTimeoutAfterCommand(); feedback.CheckTimeout();
+            Check(feedback.Fresh, "Freshness resumes with a response window after path startup");
+            Thread.Sleep(1050); feedback.CheckTimeout();
+            Check(failures == 1 && !feedback.Fresh, "Feedback timeout remains active after path startup finishes");
         }
     }
     private static void ConfigurationAndLogs(string directory)
@@ -191,6 +377,14 @@ internal static class MotorDebugTests
                 session.SetSpeed(3, 2); session.Send("SIMFAULT3"); feedback = session.ReadFeedback(1, 2, 3, 0);
                 int cancellationChecks = 0; session.Move(1, 100, 1, delegate { return ++cancellationChecks > 1; });
                 Check(Double.Parse(session.Send("#1P").Response, CultureInfo.InvariantCulture) == 0 && cancellationChecks == 2, "Cancellation during speed setup suppresses the actual move command");
+                session.SetSpeed(1, 1); session.Send("I122=9"); cancellationChecks = 0;
+                session.Move(1, 100, 1, delegate { return ++cancellationChecks > 1; });
+                Check(session.Send("I122").Response.Trim() == "1" && Double.Parse(session.Send("#1P").Response, CultureInfo.InvariantCulture) == 0,
+                    "Speed changed outside the motion helper is corrected and verified before motion, with cancellation still honored");
+                session.Move(1, 100, 1, 0.05M, delegate { return false; });
+                Check(Math.Abs(Double.Parse(session.Send("I119").Response, CultureInfo.InvariantCulture) - 0.05) < 0.000001 &&
+                    session.Send("I120").Response.Trim() == "27" && session.Send("I121").Response.Trim() == "6",
+                    "Point-to-point motion writes the derived acceleration and S-curve timing before its target");
             }, delegate(Exception error) { failure = error; done = true; });
             Until(delegate { return done; }, "Serialized simulator protocol request completes"); if (failure != null) throw failure;
             Check(remainsDisabled, "Global stop never re-enables a disabled amplifier");
@@ -234,6 +428,24 @@ internal static class MotorDebugTests
                 release.Set(); Until(delegate { return !Field<OperationState>(form, "operations").FeedbackStale; }, "Communication can recover without automatic movement");
                 Check(!Field<OperationState>(form, "operations").ManualExecuting && Field<FeedbackService>(form, "feedbackService").Latest.Find(3).Position == 100, "Reconnection never resumes an old move");
             }
+            path.Pages.SelectedIndex = 1;
+            motion.Target.Value = 1000; motion.MoveButton.PerformClick();
+            Until(delegate { return Field<OperationState>(form, "operations").MovingMotor.HasValue && !Field<OperationState>(form, "operations").ManualBusy; }, "UI recovery fixture begins a manual target");
+            Button recover = Field<Button>(form, "globalRecover");
+            Check(recover.Enabled, "The recovery button remains accessible while an action owns the UI");
+            recover.PerformClick();
+            Until(delegate { return !Field<OperationState>(form, "operations").ManualExecuting && !Field<OperationState>(form, "operations").WorkflowBusy; }, "Recovery button releases both manual and workflow waiting after verified feedback");
+            Check(!Field<FeedbackService>(form, "feedbackService").Latest.Find(3).Status.Enabled && states.EnableButton.Enabled && !motion.MoveButton.Enabled,
+                "Recovered UI offers deliberate enable while motion stays disabled");
+            Pump(100); Snapshot(form, Path.Combine(directory, "recovery-controls.png"));
+            form.Size = form.MinimumSize; Pump(100);
+            Snapshot(form, Path.Combine(directory, "recovery-minimum-window.png"));
+            Check(recover.Width >= 170 && recover.Height >= 24 && recover.Parent.ClientRectangle.Contains(recover.Bounds),
+                "Recovery control stays visible in the minimum window: button=" + recover.Bounds + "; parent=" + recover.Parent.ClientRectangle);
+            ((ScrollableControl)states.Parent.Parent).ScrollControlIntoView(states); Pump(100);
+            Snapshot(form, Path.Combine(directory, "recovery-minimum-manual-controls.png"));
+            Check(states.RepairOutputButton.Parent.ClientRectangle.Contains(states.RepairOutputButton.Bounds),
+                "Pulse repair button fits the existing manual control row: button=" + states.RepairOutputButton.Bounds + "; parent=" + states.RepairOutputButton.Parent.ClientRectangle);
             form.Close(); Until(delegate { return form.IsDisposed; }, "Verified idle application closes");
         }
     }
@@ -243,7 +455,7 @@ internal static class MotorDebugTests
         try
         {
             Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
-            Guarding(); ManualMotion(); TimeoutAndAlarms(); ControllerProtocol();
+            Guarding(); ManualMotion(); FocusedFeedback(); Recovery(); WorkflowRecovery(); PulseRepair(); TimeoutAndAlarms(); ControllerProtocol();
             string directory = Path.Combine(Path.GetTempPath(), "pmac-motor-tests-" + Guid.NewGuid().ToString("N")); ConfigurationAndLogs(directory);
             Interface(args.Length == 0 ? directory : args[0]);
             Console.WriteLine("PASS: " + checks + " motor debugging assertions; simulation only, no hardware accessed."); return 0;

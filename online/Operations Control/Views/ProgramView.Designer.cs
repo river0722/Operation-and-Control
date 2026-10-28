@@ -1,4 +1,4 @@
-﻿namespace Operations_Control.Views
+namespace Operations_Control.Views
 {
     partial class ProgramView
     {
@@ -22,7 +22,6 @@
             this.FileLabel = new System.Windows.Forms.TextBox();
             this.BrowseButton = new System.Windows.Forms.Button();
             this.fileButtons = new System.Windows.Forms.TableLayoutPanel();
-            this.EditButton = new System.Windows.Forms.Button();
             this.SaveButton = new System.Windows.Forms.Button();
             this.DownloadButton = new System.Windows.Forms.Button();
             this.responseLabel = new System.Windows.Forms.Label();
@@ -109,18 +108,8 @@
             this.fileButtons.Dock = System.Windows.Forms.DockStyle.Fill;
             this.fileButtons.Margin = new System.Windows.Forms.Padding(0);
             this.fileButtons.Padding = new System.Windows.Forms.Padding(0);
-            this.fileButtons.ColumnCount = 3;
+            this.fileButtons.ColumnCount = 2;
             this.fileButtons.RowCount = 1;
-            // EditButton
-            this.EditButton.Name = "EditButton";
-            this.EditButton.TabIndex = 9;
-            this.EditButton.Text = "打开/编辑";
-            this.EditButton.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.EditButton.Font = new System.Drawing.Font("Microsoft YaHei UI", 10F, System.Drawing.FontStyle.Regular);
-            this.EditButton.Margin = new System.Windows.Forms.Padding(3);
-            this.EditButton.FlatStyle = System.Windows.Forms.FlatStyle.Standard;
-            this.EditButton.UseVisualStyleBackColor = true;
-            this.EditButton.AccessibleName = "打开/编辑";
             // SaveButton
             this.SaveButton.Name = "SaveButton";
             this.SaveButton.TabIndex = 10;
@@ -175,13 +164,11 @@
             this.programLayout.Controls.Add(this.fileLabel, 0, 1);
             this.programLayout.Controls.Add(this.FileLabel, 1, 1);
             this.programLayout.Controls.Add(this.BrowseButton, 2, 1);
-            this.fileButtons.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 34F));
-            this.fileButtons.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 33F));
-            this.fileButtons.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 33F));
+            this.fileButtons.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
+            this.fileButtons.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
             this.fileButtons.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
-            this.fileButtons.Controls.Add(this.EditButton, 0, 0);
-            this.fileButtons.Controls.Add(this.SaveButton, 1, 0);
-            this.fileButtons.Controls.Add(this.DownloadButton, 2, 0);
+            this.fileButtons.Controls.Add(this.SaveButton, 0, 0);
+            this.fileButtons.Controls.Add(this.DownloadButton, 1, 0);
             this.programLayout.Controls.Add(this.fileButtons, 0, 2);
             this.programLayout.SetColumnSpan(this.fileButtons, 3);
             this.programLayout.Controls.Add(this.responseLabel, 0, 3);
@@ -217,7 +204,6 @@
         public System.Windows.Forms.TextBox FileLabel;
         public System.Windows.Forms.Button BrowseButton;
         private System.Windows.Forms.TableLayoutPanel fileButtons;
-        public System.Windows.Forms.Button EditButton;
         public System.Windows.Forms.Button SaveButton;
         public System.Windows.Forms.Button DownloadButton;
         private System.Windows.Forms.Label responseLabel;

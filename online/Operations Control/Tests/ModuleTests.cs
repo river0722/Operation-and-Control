@@ -52,8 +52,12 @@ internal static class ModuleTests
         public void SetSpeed(int motor, decimal speed) { }
         public void Jog(int motor, int direction, decimal speed, decimal? step) { Commands.Add("jog"); }
         public void Jog(int motor, int direction, decimal speed, decimal? step, Func<bool> cancelled) { if (!cancelled()) Jog(motor, direction, speed, step); }
+        public void Jog(int motor, int direction, decimal speed, decimal? step, decimal acceleration) { Jog(motor, direction, speed, step); }
+        public void Jog(int motor, int direction, decimal speed, decimal? step, decimal acceleration, Func<bool> cancelled) { if (!cancelled()) Jog(motor, direction, speed, step, acceleration); }
         public void Move(int motor, decimal target, decimal speed) { }
         public void Move(int motor, decimal target, decimal speed, Func<bool> cancelled) { if (!cancelled()) Move(motor, target, speed); }
+        public void Move(int motor, decimal target, decimal speed, decimal acceleration) { }
+        public void Move(int motor, decimal target, decimal speed, decimal acceleration, Func<bool> cancelled) { if (!cancelled()) Move(motor, target, speed, acceleration); }
         public void MovePair(int x, int y, MotionPoint point) { Commands.Add("follow"); }
         public void ZeroPosition(int motor) { }
         public void Stop(IEnumerable<int> motors) { Commands.Add("stop"); if (FailStop) throw new InvalidOperationException("stop failed"); }
@@ -66,6 +70,13 @@ internal static class ModuleTests
                 new AxisSample(x, Snapshot.XCounts, null, DateTime.Now) { Status = Snapshot.XStatus, TimeMs = Snapshot.TimeMs },
                 new AxisSample(y, Snapshot.YCounts, null, DateTime.Now) { Status = Snapshot.YStatus, TimeMs = Snapshot.TimeMs },
                 new AxisSample(selectedMotor, 0, null, DateTime.Now) { Status = Snapshot.XStatus, TimeMs = Snapshot.TimeMs } });
+        }
+        public AxisSample ReadAxisFeedback(int motor)
+        {
+            if (FailRead) throw new InvalidOperationException("read failed");
+            bool x = motor == 1;
+            return new AxisSample(motor, x ? Snapshot.XCounts : Snapshot.YCounts, null, DateTime.Now)
+            { Status = x ? Snapshot.XStatus : Snapshot.YStatus, TimeMs = MonotonicClock.NowMs };
         }
         public double StartPlan(MotionPlan plan, double lag, Func<bool> cancelled)
         {
@@ -247,9 +258,31 @@ internal static class ModuleTests
             Directory.Delete(directory);
         }
     }
+
+    private static void PointToPointProfile()
+    {
+        ManualMotionProfile profile = Operations_Control.Motion.PointToPointProfile.Calculate(1, 0.05);
+        Check(profile.AccelerationTimeMs >= 20 && profile.SCurveTimeMs > 0 && 2 * profile.SCurveTimeMs < profile.AccelerationTimeMs,
+            "Point-to-point profile derives a valid acceleration and S-curve time");
+        SCurveTrajectory longMove = new SCurveTrajectory(0, 100, 1, profile.MaximumAcceleration, profile.AccelerationTimeMs, profile.SCurveTimeMs);
+        Check(Operations_Control.Motion.PointToPointProfile.EstimateDuration(100, 1, profile) == longMove.DurationMs,
+            "Point-to-point wait time uses the same distance, speed and acceleration relation");
+        Check(longMove.PositionAt(0) == 0 && longMove.PositionAt(longMove.DurationMs) == 100 && longMove.DurationMs > 100,
+            "Long point-to-point move reaches its target with a bounded acceleration profile");
+        double previous = longMove.PositionAt(0);
+        for (int i = 1; i <= 100; i++)
+        {
+            double current = longMove.PositionAt(longMove.DurationMs * i / 100);
+            Check(current >= previous - 0.000001, "Point-to-point profile remains monotonic");
+            previous = current;
+        }
+        SCurveTrajectory shortMove = new SCurveTrajectory(10, 10.1, 1, profile.MaximumAcceleration, profile.AccelerationTimeMs, profile.SCurveTimeMs);
+        Check(shortMove.PositionAt(shortMove.DurationMs / 2) > 10 && shortMove.PositionAt(shortMove.DurationMs) == 10.1,
+            "Short point-to-point move uses a triangular profile without overshoot");
+    }
     private static int Main()
     {
-        try { Execution(); Cancellation(); Homing(); FeedbackAndManual(); Files(); Console.WriteLine("PASS: " + checks + " module assertions; no UI or hardware accessed."); return 0; }
+        try { Execution(); Cancellation(); Homing(); FeedbackAndManual(); Files(); PointToPointProfile(); Console.WriteLine("PASS: " + checks + " module assertions; no UI or hardware accessed."); return 0; }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }
     }
 }

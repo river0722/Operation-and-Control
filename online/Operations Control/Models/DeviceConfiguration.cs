@@ -25,6 +25,9 @@ namespace Operations_Control.Models
         public string DeviceName = String.Empty;
         public int XMotor = 1, YMotor = 2;
         public double XMin = -10, XMax = 10, YMin = -10, YMax = 10, XScale = 100, YScale = 100;
+        public InterpolationMode Interpolation = InterpolationMode.PVT;
+        public double Speed = 5, Acceleration = 20, Spacing = 0.5, DxfScale = 1, SimulatorLagMs = 80;
+        public int CoordinateSystem = 1, ProgramNumber = 20;
         public List<AxisConfiguration> Axes = new List<AxisConfiguration>();
         public List<IoConfiguration> Inputs = new List<IoConfiguration>();
         public AxisConfiguration Axis(int motor)
@@ -36,6 +39,10 @@ namespace Operations_Control.Models
         {
             if (XMotor < 1 || XMotor > 8 || YMotor < 1 || YMotor > 8 || XMotor == YMotor) throw new ArgumentException("X/Y 轴映射无效。");
             new CanvasSettings(XMin, XMax, YMin, YMax, XScale, YScale, "mm");
+            if (!PlanningOptions.Finite(Speed) || Speed <= 0 || Speed > 1000 || !PlanningOptions.Finite(Acceleration) || Acceleration <= 0 || Acceleration > 100000 ||
+                !PlanningOptions.Finite(Spacing) || Spacing < 0.001 || Spacing > 100 || !PlanningOptions.Finite(DxfScale) || DxfScale <= 0 || DxfScale > 1000000 ||
+                !PlanningOptions.Finite(SimulatorLagMs) || SimulatorLagMs < 0 || SimulatorLagMs > 2000 || CoordinateSystem < 1 || CoordinateSystem > 16 || ProgramNumber < 1 || ProgramNumber > 32767)
+                throw new ArgumentException("路径规划参数无效。");
             if (Inputs.Count > 32) throw new ArgumentException("单次诊断最多配置 32 路 I/O。");
             HashSet<int> seen = new HashSet<int>();
             foreach (AxisConfiguration axis in Axes)

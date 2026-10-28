@@ -85,7 +85,9 @@ internal static class WorkflowTests
             Near(PathGeometry.Distance(plan.At(plan.DurationMs), new MotionPoint(2, 2)), 0, 1e-8, "Endpoint preserved");
             Check(plan.Program.Contains("I5190=1000") && plan.Program.Contains("#1->100X"), "Program declares units and mapping");
             Check(!plan.Program.Contains("UNDEFINE ALL") && !plan.Program.Contains("ENABLE PLC"), "Program does not rewrite unrelated axes or PLCs");
-            Check(plan.Program.Contains(mode == InterpolationMode.PVT ? "PVT" : "SPLINE1"), "Requested interpolation emitted");
+            Check(plan.Program.Contains(mode == InterpolationMode.PVT ? "PVT " : "SPLINE1"), "Requested interpolation emitted");
+            if (mode == InterpolationMode.PVT) Check(plan.Program.Contains("DWELL 0"), "PVT program uses PMAC command separators");
+            else Check(plan.Program.Contains("SPLINE1 TM "), "Spline program separates TM from its time value");
             double maxSpeed = 0, maxAcceleration = 0, boundary = 0;
             for (int i = 0; i < plan.Segments.Count; i++)
             {

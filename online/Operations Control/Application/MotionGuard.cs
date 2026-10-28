@@ -33,7 +33,8 @@ namespace Operations_Control.Application
             if (status.OpenLoop) return "电机处于开环";
             if (status.BlockingFault) return status.FaultDescription;
             if (status.Homing) return "电机正在寻零";
-            if (requireStopped && (!status.VelocityZero || !status.InPosition)) return "电机尚未停稳或到位";
+            if (requireStopped && !status.VelocityZero) return "电机指令仍在运动，请先停止";
+            if (requireStopped && !status.InPosition) return "指令已停止，但位置未到位；可用“解除等待并去使能”进入恢复";
             if (status.PositiveLimit && direction >= 0) return "正限位触发，只允许向负方向退出";
             if (status.NegativeLimit && direction <= 0) return "负限位触发，只允许向正方向退出";
             if (speed <= 0 || speed > Configuration.Axis(sample.Motor).MaximumSpeed) return "速度超过该轴配置的上限";

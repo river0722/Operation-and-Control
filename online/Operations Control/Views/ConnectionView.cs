@@ -20,7 +20,7 @@ namespace Operations_Control.Views
             ConnectButton.Enabled = !connected && !busy;
             DisconnectButton.Enabled = connected && !busy;
             status.Text = busy ? "正在处理…" : connected ? "已连接" : "未连接";
-            status.ForeColor = connected ? UiTheme.Success : UiTheme.Muted;
+            status.ForeColor = busy ? UiTheme.Primary : connected ? UiTheme.Success : UiTheme.Muted;
             device.Text = connected ? deviceName : String.Empty;
         }
     }

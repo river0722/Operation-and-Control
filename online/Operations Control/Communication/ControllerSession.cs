@@ -1,11 +1,11 @@
 using Operations_Control.Files;
-using Operations_Control.Motion;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
 using Operations_Control.Models;
+using Operations_Control.Motion;
 
 namespace Operations_Control.Communication
 {
@@ -53,15 +53,24 @@ namespace Operations_Control.Communication
             ValidateMotor(selectedMotor);
             ControllerSnapshot snapshot = ReadSnapshot(x, y, coordinateSystem);
             AxisSample first = Sample(x, snapshot.XCounts), second = Sample(y, snapshot.YCounts);
+            first.TimeMs = snapshot.XTimeMs; second.TimeMs = snapshot.YTimeMs;
             first.Status = snapshot.XStatus; second.Status = snapshot.YStatus;
             first.FollowingError = ReadNumber("#" + x + "F"); second.FollowingError = ReadNumber("#" + y + "F");
-            AxisSample selected = selectedMotor == x ? first : selectedMotor == y ? second : Sample(selectedMotor, ReadPosition(selectedMotor));
-            if (selectedMotor != x && selectedMotor != y)
-            {
-                selected.Status = MotorStatus.Parse(Send("#" + selectedMotor + "?").Response);
-                selected.FollowingError = ReadNumber("#" + selectedMotor + "F");
-            }
+            AxisSample selected = selectedMotor == x ? first : selectedMotor == y ? second : ReadAxisFeedback(selectedMotor);
             return new ControllerFeedback(snapshot, new AxisSample[] { first, second, selected });
+        }
+
+        public AxisSample ReadAxisFeedback(int motor)
+        {
+            ValidateMotor(motor);
+            double begin = MonotonicClock.NowMs;
+            AxisSample sample = Sample(motor, ReadPosition(motor));
+            // The position must have been queried after a command was accepted
+            // before its status can be used to confirm that command.
+            sample.TimeMs = begin;
+            sample.Status = MotorStatus.Parse(Send("#" + motor + "?").Response);
+            sample.FollowingError = ReadNumber("#" + motor + "F");
+            return sample;
         }
 
         private AxisSample Sample(int motor, double position)
@@ -90,14 +99,38 @@ namespace Operations_Control.Communication
             if (Math.Abs(ReadNumber("I" + motor + "22") - (double)speed) > 0.000001) throw new InvalidOperationException("速度写入后回读不一致。");
         }
 
+        private void EnsureSpeed(int motor, decimal speed)
+        {
+            ValidateMotor(motor);
+            if (speed <= 0 || speed > 15) throw new ArgumentOutOfRangeException("speed");
+            // Read the actual parameter even when another program or PLC may
+            // have changed it.  An unchanged speed costs one query, no write.
+            if (Math.Abs(ReadNumber("I" + motor + "22") - (double)speed) > 0.000001) SetSpeed(motor, speed);
+        }
+
         public void Jog(int motor, int direction, decimal speed, decimal? step)
         { Jog(motor, direction, speed, step, delegate { return false; }); }
         public void Jog(int motor, int direction, decimal speed, decimal? step, Func<bool> cancelled)
         {
             if (cancelled()) return;
-            SetSpeed(motor, speed);
+            EnsureSpeed(motor, speed);
             if (cancelled()) return;
             Send("#" + motor + (step.HasValue ? "J^" + (step.Value * direction).ToString(CultureInfo.InvariantCulture) : direction > 0 ? "J+" : "J-"));
+        }
+
+        public void Jog(int motor, int direction, decimal speed, decimal? step, decimal acceleration)
+        { Jog(motor, direction, speed, step, acceleration, delegate { return false; }); }
+
+        public void Jog(int motor, int direction, decimal speed, decimal? step, decimal acceleration, Func<bool> cancelled)
+        {
+            if (!step.HasValue) { Jog(motor, direction, speed, step, cancelled); return; }
+            ValidateMotor(motor);
+            if (cancelled()) return;
+            ManualMotionProfile profile = PointToPointProfile.Calculate((double)speed, (double)acceleration);
+            if (!EnsureMotionProfile(motor, profile, cancelled)) return;
+            EnsureSpeed(motor, speed);
+            if (cancelled()) return;
+            Send("#" + motor + "J^" + (step.Value * direction).ToString(CultureInfo.InvariantCulture));
         }
 
         public void Move(int motor, decimal target, decimal speed)
@@ -105,9 +138,45 @@ namespace Operations_Control.Communication
         public void Move(int motor, decimal target, decimal speed, Func<bool> cancelled)
         {
             if (cancelled()) return;
-            SetSpeed(motor, speed);
+            EnsureSpeed(motor, speed);
             if (cancelled()) return;
             Send("#" + motor + "J=" + target.ToString(CultureInfo.InvariantCulture));
+        }
+
+        public void Move(int motor, decimal target, decimal speed, decimal acceleration)
+        { Move(motor, target, speed, acceleration, delegate { return false; }); }
+
+        public void Move(int motor, decimal target, decimal speed, decimal acceleration, Func<bool> cancelled)
+        {
+            ValidateMotor(motor);
+            if (cancelled()) return;
+            ManualMotionProfile profile = PointToPointProfile.Calculate((double)speed, (double)acceleration);
+            if (!EnsureMotionProfile(motor, profile, cancelled)) return;
+            EnsureSpeed(motor, speed);
+            if (cancelled()) return;
+            IPointToPointTransport simulated = transport as IPointToPointTransport;
+            if (simulated != null) { simulated.MovePointToPoint(motor, (double)target, (double)speed, profile); return; }
+            Send("#" + motor + "J=" + target.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private bool EnsureMotionProfile(int motor, ManualMotionProfile profile, Func<bool> cancelled)
+        {
+            string prefix = "I" + motor;
+            if (cancelled()) return false;
+            EnsureParameter(prefix + "19", profile.MaximumAcceleration);
+            if (cancelled()) return false;
+            EnsureParameter(prefix + "20", profile.AccelerationTimeMs);
+            if (cancelled()) return false;
+            EnsureParameter(prefix + "21", profile.SCurveTimeMs);
+            return !cancelled();
+        }
+
+        private void EnsureParameter(string variable, double value)
+        {
+            if (Math.Abs(ReadNumber(variable) - value) <= 0.000001) return;
+            Send(variable + "=" + value.ToString("0.########", CultureInfo.InvariantCulture));
+            if (Math.Abs(ReadNumber(variable) - value) > 0.000001)
+                throw new InvalidOperationException(variable + " 写入后回读不一致。");
         }
 
         public void Stop(IEnumerable<int> motors)
@@ -207,11 +276,30 @@ namespace Operations_Control.Communication
                 {
                     Download(file.Path);
                     if (cancelled()) throw new OperationCanceledException("下载后已取消，未运行路径。");
+                    WaitForCoordinateReady(plan.Options.CoordinateSystem, cancelled);
                     double now = MonotonicClock.NowMs;
                     Send("&" + plan.Options.CoordinateSystem + "B" + plan.Options.ProgramNumber + "R"); return now;
                 }
                 catch { try { StopPlan(plan.Options.CoordinateSystem, plan.Options.XMotor, plan.Options.YMotor); } catch { } throw; }
             }
+        }
+
+        private void WaitForCoordinateReady(int coordinateSystem, Func<bool> cancelled)
+        {
+            Exception lastFailure = null;
+            for (int attempt = 0; attempt < 10; attempt++)
+            {
+                if (cancelled()) throw new OperationCanceledException("下载后已取消，未运行路径。");
+                try
+                {
+                    CoordinateStatus state = CoordinateStatus.Parse(Send("&" + coordinateSystem + "??").Response);
+                    if (!state.Running && !state.Fault && state.InPosition) return;
+                }
+                catch (Exception error) { lastFailure = error; }
+                Thread.Sleep(100);
+            }
+            if (lastFailure != null) throw new InvalidOperationException("程序下载后无法重新读取坐标系状态。", lastFailure);
+            throw new InvalidOperationException("程序下载后坐标系未恢复为空闲、无故障且已到位状态。");
         }
 
         public void StopPlan(int coordinateSystem, int x, int y)

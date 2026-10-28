@@ -55,7 +55,8 @@ namespace Operations_Control.Models
         {
             return (Enabled ? "已使能" : "未使能") + (OpenLoop ? " / 开环" : " / 闭环") + (Fault ? " / " + FaultDescription : "") +
                 (PositiveLimit ? " / 正限位" : "") + (NegativeLimit ? " / 负限位" : "") +
-                (FollowingWarning ? " / 跟随误差预警" : "") + (Homing ? " / 寻零中" : HomeComplete ? " / 已寻零" : " / 未寻零") + (InPosition ? " / 到位" : Enabled ? " / 运动中" : " / 位置监测");
+                (FollowingWarning ? " / 跟随误差预警" : "") + (Homing ? " / 寻零中" : HomeComplete ? " / 已寻零" : " / 未寻零") +
+                (InPosition ? " / 到位" : Enabled ? VelocityZero ? " / 指令已停止，未到位" : " / 指令运动中" : " / 位置监测");
         }
     }
     public sealed class CoordinateStatus

@@ -14,6 +14,7 @@ namespace Operations_Control.Controls
         public static readonly Color Primary = Color.FromArgb(39, 91, 204);
         public static readonly Color Danger = Color.FromArgb(180, 45, 54);
         public static readonly Color Success = Color.FromArgb(27, 112, 83);
+        public static readonly Color Warning = Color.FromArgb(140, 92, 8);
 
         // Keep designer-chosen colors, while showing a distinct disabled state at runtime.
         public static void BindButtonStates(Control root)

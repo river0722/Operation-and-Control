@@ -52,6 +52,7 @@
   <ItemGroup>
     <Compile Include="Application\OperationState.cs" />
     <Compile Include="Application\ManualMotionService.cs" />
+    <Compile Include="Application\PulseOutputRepair.cs" />
     <Compile Include="Application\FeedbackService.cs" />
     <Compile Include="Application\MotionWorkflow.cs" />
     <Compile Include="Application\MotionPlanningService.cs" />
@@ -78,6 +79,7 @@
     <Compile Include="Motion\PathGeometry.cs" />
     <Compile Include="Files\DxfReader.cs" />
     <Compile Include="Motion\TrajectoryPlanner.cs" />
+    <Compile Include="Motion\PointToPointProfile.cs" />
     <Compile Include="Communication\PmacProgramWriter.cs" />
     <Compile Include="Motion\TrajectoryAnalysis.cs" />
     <Compile Include="Views\PathView.cs"><SubType>UserControl</SubType></Compile>
@@ -101,6 +103,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <None Include="Assets\pmac-console.ico" />
     <None Include="Assets\pmac-console.png" />
+    <None Include="Assets\team-logo-background.png" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>

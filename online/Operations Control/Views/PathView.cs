@@ -10,6 +10,7 @@ using Operations_Control.Communication;
 using Operations_Control.Motion;
 using Operations_Control.Files;
 using Operations_Control.Application;
+using Operations_Control.Controls;
 
 namespace Operations_Control.Views
 {
@@ -41,6 +42,7 @@ namespace Operations_Control.Views
         public event EventHandler ActivityChanged;
         public event EventHandler StatusChanged;
         public event EventHandler SnapshotChanged;
+        public event EventHandler PlanningSettingsChanged;
         public ControllerSnapshot LatestSnapshot { get { return lastSample; } }
         public string StatusText { get { return feedbackLabel.Text; } }
         public bool StatusError { get { return feedbackLabel.ForeColor == Color.Firebrick; } }
@@ -65,7 +67,6 @@ namespace Operations_Control.Views
             workflow.Configure(simulated, settings, mappingReady, x, y, selectedMotor);
             drawingCanvas = canvases.DrawingCanvas; actualCanvas = canvases.ActualCanvas;
             InitializeComponent();
-            actions.Controls.Add(readinessLabel);
             drawingCanvas.Settings = actualCanvas.Settings = mapping;
             hardwareConfirmed.Enabled = !simulation; lag.Enabled = simulation;
             drawing = drawingCanvas.GetPath();
@@ -85,8 +86,8 @@ namespace Operations_Control.Views
             enableButton.Click += delegate { EnableAxes(true); };
             disableButton.Click += delegate { EnableAxes(false); };
             homeButton.Click += delegate { StartHoming(); };
-            foreach (NumericUpDown input in new NumericUpDown[] { speed, acceleration, spacing, coordinate, programNumber }) input.ValueChanged += delegate { InvalidatePlan(); };
-            interpolation.SelectedIndexChanged += delegate { InvalidatePlan(); };
+            foreach (NumericUpDown input in new NumericUpDown[] { speed, acceleration, spacing, coordinate, programNumber, unitlessScale, lag }) input.ValueChanged += delegate { InvalidatePlan(); if (PlanningSettingsChanged != null) PlanningSettingsChanged(this, EventArgs.Empty); };
+            interpolation.SelectedIndexChanged += delegate { InvalidatePlan(); if (PlanningSettingsChanged != null) PlanningSettingsChanged(this, EventArgs.Empty); };
             hardwareConfirmed.CheckedChanged += delegate { UpdateButtons(); };
             drawingCanvas.StrokeStarted += delegate { currentStroke = new List<MotionPoint>(); drawing.Strokes.Add(currentStroke); InvalidatePlan(); };
             drawingCanvas.PointDrawn += delegate(object sender, DrawPointEventArgs e)
@@ -134,7 +135,24 @@ namespace Operations_Control.Views
             hardwareConfirmed.Enabled = !simulated; lag.Enabled = simulated;
             InvalidatePlan();
         }
-        public void RefreshState() { UpdateButtons(); }
+        public void RefreshState() { UpdatePollInterval(); UpdateButtons(); }
+        public void ApplySavedPlanningSettings(DeviceConfiguration saved)
+        {
+            if (saved == null) return;
+            interpolation.SelectedIndex = saved.Interpolation == InterpolationMode.Spline ? 1 : 0;
+            speed.Value = (decimal)saved.Speed; acceleration.Value = (decimal)saved.Acceleration; spacing.Value = (decimal)saved.Spacing;
+            coordinate.Value = saved.CoordinateSystem; programNumber.Value = saved.ProgramNumber;
+            unitlessScale.Value = (decimal)saved.DxfScale; lag.Value = (decimal)saved.SimulatorLagMs;
+            InvalidatePlan();
+        }
+        public void SavePlanningSettings(DeviceConfiguration target)
+        {
+            if (target == null) return;
+            target.Interpolation = interpolation.SelectedIndex == 1 ? InterpolationMode.Spline : InterpolationMode.PVT;
+            target.Speed = (double)speed.Value; target.Acceleration = (double)acceleration.Value; target.Spacing = (double)spacing.Value;
+            target.CoordinateSystem = (int)coordinate.Value; target.ProgramNumber = (int)programNumber.Value;
+            target.DxfScale = (double)unitlessScale.Value; target.SimulatorLagMs = (double)lag.Value;
+        }
         public void CancelPendingWork() { Interlocked.Increment(ref generation); workflow.CancelPendingWork(); feedbackService.Clear(); pollTimer.Stop(); }
         public void ResumePolling() { if (!IsDisposed) pollTimer.Start(); }
 
@@ -170,6 +188,8 @@ namespace Operations_Control.Views
             bool connected = session != null && session.IsConnected;
             runButton.Enabled = !locked && plan != null && connected && HardwareReady && Fresh && lastSample.Ready && lastSample.InPosition;
             readinessLabel.Text = "运行条件：" + (locked ? "等待当前操作完成" : !connected ? "需连接设备" : plan == null ? "需生成规划" : !HardwareReady ? "请应用坐标并确认实机配置" : !Fresh ? "反馈过期／未知" : !lastSample.Ready ? "轴未就绪，请检查使能、故障与限位" : !lastSample.InPosition ? "等待轴停稳到位" : "已满足");
+            readinessLabel.ForeColor = locked ? UiTheme.Primary : runButton.Enabled ? UiTheme.Success :
+                !connected || plan == null ? UiTheme.Muted : UiTheme.Warning;
             saveProgramButton.Enabled = plan != null && !locked;
             analyzeButton.Enabled = exportButton.Enabled = !locked && run != null && run.Samples.Count > 0;
             enableButton.Enabled = disableButton.Enabled = !locked && connected && HardwareReady;
@@ -244,7 +264,17 @@ namespace Operations_Control.Views
                 if (workflow.IsExecuting) { actualCanvas.ClearPath(); analysisText.Clear(); displayedSamples = 0; }
             });
         }
-        private void Poll(object sender, EventArgs e) { if (!IsDisposed) workflow.Poll(); }
+        private void Poll(object sender, EventArgs e)
+        {
+            if (IsDisposed) return;
+            UpdatePollInterval();
+            workflow.Poll();
+        }
+        private void UpdatePollInterval()
+        {
+            int interval = operations != null && operations.ManualExecuting ? 25 : 50;
+            if (pollTimer.Interval != interval) pollTimer.Interval = interval;
+        }
         private void DisplaySnapshot(object sender, EventArgs e)
         {
             if (IsDisposed) return;
@@ -263,6 +293,9 @@ namespace Operations_Control.Views
         private void EnableAxes(bool enabled) { Try(delegate { workflow.EnableAxes(enabled, hardwareConfirmed.Checked); }); }
         public void StartHoming() { Try(delegate { workflow.StartHoming(homeTarget.SelectedIndex, (int)plcNumber.Value, (double)homeTimeout.Value, hardwareConfirmed.Checked); }); }
         public void StopExecution() { workflow.Stop(); }
+        public Action PrepareRecovery() { Interlocked.Increment(ref generation); return workflow.PrepareRecovery(); }
+        public bool RecoveryReady { get { return workflow.RecoveryReady; } }
+        public void CompleteRecovery() { workflow.CompleteRecovery(); }
         public void StopExecution(Action<Exception> completed) { workflow.Stop(completed); }
         private void SaveProgram(object sender, EventArgs e)
         {

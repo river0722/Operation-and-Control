@@ -60,5 +60,11 @@ namespace Operations_Control.Properties {
             }
         }
         
+        internal static global::System.Drawing.Bitmap TeamLogoBackground {
+            get {
+                return ((global::System.Drawing.Bitmap)(ResourceManager.GetObject("TeamLogoBackground", resourceCulture)));
+            }
+        }
+
     }
 }

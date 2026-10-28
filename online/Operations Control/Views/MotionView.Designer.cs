@@ -1,4 +1,4 @@
-﻿namespace Operations_Control.Views
+namespace Operations_Control.Views
 {
     partial class MotionView
     {
@@ -21,6 +21,8 @@
             this.stepHint = new System.Windows.Forms.Label();
             this.speedLabel = new System.Windows.Forms.Label();
             this.Speed = new System.Windows.Forms.NumericUpDown();
+            this.accelerationLabel = new System.Windows.Forms.Label();
+            this.Acceleration = new System.Windows.Forms.NumericUpDown();
             this.ApplySpeedButton = new System.Windows.Forms.Button();
             this.SingleStep = new System.Windows.Forms.CheckBox();
             this.axesLayout = new System.Windows.Forms.TableLayoutPanel();
@@ -39,7 +41,6 @@
             this.MoveButton = new System.Windows.Forms.Button();
             this.Target = new System.Windows.Forms.NumericUpDown();
             this.ZeroButton = new System.Windows.Forms.Button();
-            this.StopButton = new System.Windows.Forms.Button();
             this.stopHint = new System.Windows.Forms.Label();
             this.motionGroup.SuspendLayout();
             this.controlLayout.SuspendLayout();
@@ -49,6 +50,7 @@
             this.positionLayout.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.Step)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.Speed)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.Acceleration)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.Target)).BeginInit();
             this.SuspendLayout();
             // motionGroup
@@ -122,6 +124,25 @@
             this.Speed.Value = 1M;
             this.Speed.DecimalPlaces = 3;
             this.Speed.Increment = 0.1M;
+            // accelerationLabel
+            this.accelerationLabel.Name = "accelerationLabel";
+            this.accelerationLabel.TabIndex = 28;
+            this.accelerationLabel.Text = "定位加速度 ct/ms^2";
+            this.accelerationLabel.Font = new System.Drawing.Font("Microsoft YaHei UI", 10F, System.Drawing.FontStyle.Regular);
+            this.accelerationLabel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.accelerationLabel.Margin = new System.Windows.Forms.Padding(2);
+            this.accelerationLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            // Acceleration
+            this.Acceleration.Name = "Acceleration";
+            this.Acceleration.TabIndex = 29;
+            this.Acceleration.Font = new System.Drawing.Font("Microsoft YaHei UI", 10F, System.Drawing.FontStyle.Regular);
+            this.Acceleration.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.Acceleration.Margin = new System.Windows.Forms.Padding(3, 5, 3, 3);
+            this.Acceleration.Minimum = 0.001M;
+            this.Acceleration.Maximum = 12M;
+            this.Acceleration.Value = 0.05M;
+            this.Acceleration.DecimalPlaces = 3;
+            this.Acceleration.Increment = 0.01M;
             // ApplySpeedButton
             this.ApplySpeedButton.Name = "ApplySpeedButton";
             this.ApplySpeedButton.TabIndex = 8;
@@ -241,7 +262,7 @@
             this.positionLayout.Margin = new System.Windows.Forms.Padding(0);
             this.positionLayout.Padding = new System.Windows.Forms.Padding(0);
             this.positionLayout.ColumnCount = 2;
-            this.positionLayout.RowCount = 5;
+            this.positionLayout.RowCount = 4;
             // motorLabel
             this.motorLabel.Name = "motorLabel";
             this.motorLabel.TabIndex = 21;
@@ -291,22 +312,10 @@
             this.ZeroButton.UseVisualStyleBackColor = true;
             this.ZeroButton.AccessibleName = "当前位置置零 HOMEZ";
             this.ZeroButton.Enabled = false;
-            // StopButton
-            this.StopButton.Name = "StopButton";
-            this.StopButton.TabIndex = 26;
-            this.StopButton.Text = "停止运动";
-            this.StopButton.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.StopButton.Font = new System.Drawing.Font("Microsoft YaHei UI", 10F, System.Drawing.FontStyle.Regular);
-            this.StopButton.Margin = new System.Windows.Forms.Padding(3);
-            this.StopButton.FlatStyle = System.Windows.Forms.FlatStyle.Standard;
-            this.StopButton.UseVisualStyleBackColor = true;
-            this.StopButton.AccessibleName = "停止运动";
-            this.StopButton.Enabled = false;
-            this.StopButton.ForeColor = System.Drawing.Color.FromArgb(180, 45, 54);
             // stopHint
             this.stopHint.Name = "stopHint";
             this.stopHint.TabIndex = 27;
-            this.stopHint.Text = "作用于 X / Y 和所选电机";
+            this.stopHint.Text = "";
             this.stopHint.Font = new System.Drawing.Font("Microsoft YaHei UI", 9.5F, System.Drawing.FontStyle.Regular);
             this.stopHint.Dock = System.Windows.Forms.DockStyle.Fill;
             this.stopHint.Margin = new System.Windows.Forms.Padding(2);
@@ -319,7 +328,7 @@
             this.jogLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 35F));
             this.jogLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 34F));
             this.jogLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 34F));
-            this.jogLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 28F));
+            this.jogLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 34F));
             this.jogLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 34F));
             this.jogLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
             this.jogLayout.Controls.Add(this.stepLabel, 0, 0);
@@ -329,7 +338,8 @@
             this.jogLayout.Controls.Add(this.Speed, 1, 1);
             this.jogLayout.Controls.Add(this.ApplySpeedButton, 2, 1);
             this.jogLayout.Controls.Add(this.SingleStep, 0, 2);
-            this.jogLayout.SetColumnSpan(this.SingleStep, 3);
+            this.jogLayout.Controls.Add(this.accelerationLabel, 1, 2);
+            this.jogLayout.Controls.Add(this.Acceleration, 2, 2);
             this.axesLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 20F));
             this.axesLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 30F));
             this.axesLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 20F));
@@ -360,7 +370,6 @@
             this.positionLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 34F));
             this.positionLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 34F));
             this.positionLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 36F));
-            this.positionLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 76F));
             this.positionLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
             this.SelectedMotor.Items.AddRange(new object[] { 1, 2, 3, 4, 5, 6, 7, 8 });
             this.positionLayout.Controls.Add(this.motorLabel, 0, 0);
@@ -369,9 +378,7 @@
             this.positionLayout.Controls.Add(this.Target, 1, 1);
             this.positionLayout.Controls.Add(this.ZeroButton, 0, 2);
             this.positionLayout.SetColumnSpan(this.ZeroButton, 2);
-            this.positionLayout.Controls.Add(this.StopButton, 0, 3);
-            this.positionLayout.SetColumnSpan(this.StopButton, 2);
-            this.positionLayout.Controls.Add(this.stopHint, 0, 4);
+            this.positionLayout.Controls.Add(this.stopHint, 0, 3);
             this.positionLayout.SetColumnSpan(this.stopHint, 2);
             this.controlLayout.Controls.Add(this.jogLayout, 0, 0);
             this.controlLayout.Controls.Add(this.positionLayout, 1, 0);
@@ -387,6 +394,7 @@
             this.Margin = new System.Windows.Forms.Padding(0);
             ((System.ComponentModel.ISupportInitialize)(this.Step)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.Speed)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.Acceleration)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.Target)).EndInit();
             this.positionLayout.ResumeLayout(false);
             this.positionLayout.PerformLayout();
@@ -413,6 +421,8 @@
         private System.Windows.Forms.Label stepHint;
         private System.Windows.Forms.Label speedLabel;
         public System.Windows.Forms.NumericUpDown Speed;
+        private System.Windows.Forms.Label accelerationLabel;
+        public System.Windows.Forms.NumericUpDown Acceleration;
         public System.Windows.Forms.Button ApplySpeedButton;
         public System.Windows.Forms.CheckBox SingleStep;
         private System.Windows.Forms.TableLayoutPanel axesLayout;
@@ -431,7 +441,6 @@
         public System.Windows.Forms.Button MoveButton;
         public System.Windows.Forms.NumericUpDown Target;
         public System.Windows.Forms.Button ZeroButton;
-        public System.Windows.Forms.Button StopButton;
         private System.Windows.Forms.Label stopHint;
     }
 }

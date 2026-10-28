@@ -10,14 +10,18 @@ using Operations_Control.Models;
 namespace Operations_Control.Communication
 {
     // In-memory axes only. No PMAC driver or physical device is touched.
-    public sealed class SimulatorTransport : IControllerTransport, IPlannedTransport
+    public sealed class SimulatorTransport : IControllerTransport, IPlannedTransport, IPointToPointTransport
     {
         private sealed class Axis
         {
             public double Position;
             public double Speed = 1;
+            public double Acceleration = 12;
+            public double AccelerationTimeMs = 25, SCurveTimeMs = 8;
             public double Direction;
             public double? Target;
+            public SCurveTrajectory Trajectory;
+            public double TrajectoryStartMs;
             public bool Enabled = true, Homed, HomeSearching, Fault;
             public double HomeUntil;
         }
@@ -69,7 +73,13 @@ namespace Operations_Control.Communication
                 if (axis.HomeSearching && now >= axis.HomeUntil) { axis.Position = 0; axis.Target = null; axis.HomeSearching = false; axis.Homed = true; }
                 if (!axis.Enabled || axis.Fault) continue;
                 double distance = axis.Speed * elapsed;
-                if (axis.Target.HasValue)
+                if (axis.Target.HasValue && axis.Trajectory != null)
+                {
+                    double trajectoryElapsed = now - axis.TrajectoryStartMs;
+                    axis.Position = axis.Trajectory.PositionAt(trajectoryElapsed);
+                    if (trajectoryElapsed >= axis.Trajectory.DurationMs) { axis.Position = axis.Target.Value; axis.Target = null; axis.Trajectory = null; }
+                }
+                else if (axis.Target.HasValue)
                 {
                     double remaining = axis.Target.Value - axis.Position;
                     axis.Position += Math.Sign(remaining) * Math.Min(Math.Abs(remaining), distance);
@@ -102,14 +112,34 @@ namespace Operations_Control.Communication
                 else { Axis axis = axes[number - 1]; axis.Fault = false; axis.Enabled = false; axis.Direction = 0; axis.Target = null; }
                 return Result(String.Empty);
             }
-            Match speed = Regex.Match(text, @"^I([1-8])22(?:=([+-]?\d+(?:\.\d+)?))?$");
-            if (speed.Success)
+            Match parameter = Regex.Match(text, @"^I([1-8])(19|20|21|22)(?:=([+-]?\d+(?:\.\d+)?))?$");
+            if (parameter.Success)
             {
-                Axis axis = axes[Int32.Parse(speed.Groups[1].Value) - 1];
-                if (!speed.Groups[2].Success) return Result(axis.Speed.ToString(CultureInfo.InvariantCulture));
-                double value = Double.Parse(speed.Groups[2].Value, CultureInfo.InvariantCulture);
-                if (value <= 0 || value > 15) throw new InvalidOperationException("点动速度应大于 0 且不超过 15 ct/ms。");
-                axis.Speed = value;
+                Axis axis = axes[Int32.Parse(parameter.Groups[1].Value) - 1];
+                string number = parameter.Groups[2].Value;
+                double current = number == "19" ? axis.Acceleration : number == "20" ? axis.AccelerationTimeMs : number == "21" ? axis.SCurveTimeMs : axis.Speed;
+                if (!parameter.Groups[3].Success) return Result(current.ToString(CultureInfo.InvariantCulture));
+                double value = Double.Parse(parameter.Groups[3].Value, CultureInfo.InvariantCulture);
+                if (number == "19")
+                {
+                    if (value <= 0 || value > 12) throw new InvalidOperationException("加速度应大于 0 且不超过 12 ct/ms^2。");
+                    axis.Acceleration = value;
+                }
+                else if (number == "20")
+                {
+                    if (value < 4 || value > 1000000 || value != Math.Floor(value)) throw new InvalidOperationException("总加速时间应为 4–1000000 ms 的整数。");
+                    axis.AccelerationTimeMs = value;
+                }
+                else if (number == "21")
+                {
+                    if (value <= 0 || value > 1000000 || value != Math.Floor(value)) throw new InvalidOperationException("S 曲线时间应为正整数毫秒。");
+                    axis.SCurveTimeMs = value;
+                }
+                else
+                {
+                    if (value <= 0 || value > 15) throw new InvalidOperationException("点动速度应大于 0 且不超过 15 ct/ms。");
+                    axis.Speed = value;
+                }
                 return Result(String.Empty);
             }
             Match motor = Regex.Match(text, @"^#([1-8])(P|F|\?|K|HM|HOME|J\+|J-|J/|HOMEZ|J[=\^]([+-]?\d+(?:\.\d+)?))$");
@@ -136,24 +166,41 @@ namespace Operations_Control.Communication
                 int word2 = (selected.Homed ? 0x400 : 0) | (selected.Fault ? 8 : 0) | (!moving && selected.Enabled && !selected.Fault ? 1 : 0);
                 return Result(word1.ToString("X6") + word2.ToString("X6"));
             }
-            if (operation == "K") { StopPlan(); selected.Enabled = false; selected.Direction = 0; selected.Target = null; selected.HomeSearching = false; return Result(String.Empty); }
+            if (operation == "K") { StopPlan(); selected.Enabled = false; selected.Direction = 0; selected.Target = null; selected.Trajectory = null; selected.HomeSearching = false; return Result(String.Empty); }
             if (operation != "J/" && operation != "HOMEZ" && (!selected.Enabled || selected.Fault)) throw new InvalidOperationException("轴未就绪。");
-            if (operation == "J/") { StopPlan(); selected.Enabled = true; selected.Direction = 0; selected.Target = null; selected.HomeSearching = false; }
-            else if (operation == "HOMEZ") { selected.Position = 0; selected.Direction = 0; selected.Target = null; }
+            if (operation == "J/") { StopPlan(); selected.Enabled = true; selected.Direction = 0; selected.Target = null; selected.Trajectory = null; selected.HomeSearching = false; }
+            else if (operation == "HOMEZ") { selected.Position = 0; selected.Direction = 0; selected.Target = null; selected.Trajectory = null; }
             else if (operation == "HM" || operation == "HOME")
             {
                 if (!selected.Enabled || selected.Fault) throw new InvalidOperationException("轴未就绪。");
-                selected.Homed = false; selected.HomeSearching = true; selected.Target = 0; selected.Direction = 0;
+                selected.Homed = false; selected.HomeSearching = true; selected.Target = 0; selected.Trajectory = null; selected.Direction = 0;
                 selected.HomeUntil = clock.ElapsedMilliseconds + Math.Max(300, Math.Abs(selected.Position) / selected.Speed);
             }
-            else if (operation == "J+" || operation == "J-") { selected.Target = null; selected.Direction = operation == "J+" ? 1 : -1; }
+            else if (operation == "J+" || operation == "J-") { selected.Target = null; selected.Trajectory = null; selected.Direction = operation == "J+" ? 1 : -1; }
             else
             {
                 double value = Double.Parse(motor.Groups[3].Value, CultureInfo.InvariantCulture);
                 selected.Target = operation[1] == '^' ? selected.Position + value : value;
+                selected.Trajectory = null;
                 selected.Direction = 0;
             }
             return Result(String.Empty);
+        }
+
+        public void MovePointToPoint(int motor, double target, double speed, ManualMotionProfile profile)
+        {
+            Update();
+            if (motor < 1 || motor > 8 || Double.IsNaN(target) || Double.IsInfinity(target) ||
+                Double.IsNaN(speed) || Double.IsInfinity(speed) || speed <= 0 || speed > 15 || profile == null)
+                throw new ArgumentException("模拟点到点目标或参数无效。");
+            Axis axis = axes[motor - 1];
+            if (!axis.Enabled || axis.Fault) throw new InvalidOperationException("轴未就绪。");
+            axis.Speed = speed;
+            axis.Target = target;
+            axis.Direction = 0;
+            axis.Trajectory = new SCurveTrajectory(axis.Position, target, speed, profile.MaximumAcceleration,
+                profile.AccelerationTimeMs, profile.SCurveTimeMs);
+            axis.TrajectoryStartMs = clock.ElapsedMilliseconds;
         }
 
         private static CommandResult Result(string response) { return new CommandResult(response, response.Length); }

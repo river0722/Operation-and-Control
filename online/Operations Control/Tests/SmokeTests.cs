@@ -244,6 +244,9 @@ internal static class SmokeTests
             Check(connection.ConnectButton.Parent.ClientRectangle.Contains(connection.ConnectButton.Bounds) &&
                 connection.DisconnectButton.Parent.ClientRectangle.Contains(connection.DisconnectButton.Bounds), "Connection buttons fit the compact header");
             Check(!motion.MoveButton.Enabled && !programs.SendButton.Enabled, "Disconnected operations must be disabled");
+            Check(connection.Visible && !path.Contains(connection), "Connection controls remain global outside the page tools");
+            Label alarm = (Label)typeof(Form1).GetField("alarmSummary", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(form);
+            Check(alarm.ForeColor == UiTheme.Muted, "No active alarms must not be presented as a fault");
             DrawMouse(canvases.DrawingCanvas, "OnMouseDown", 1, 1);
             DrawMouse(canvases.DrawingCanvas, "OnMouseMove", 2, 2);
             DrawMouse(canvases.DrawingCanvas, "OnMouseUp", 2, 2);
@@ -254,6 +257,25 @@ internal static class SmokeTests
             Pump(550);
             Screenshot(form, Path.Combine(output, "motion-control.png"));
             path.Pages.SelectedTab = (TabPage)motion.Parent.Parent;
+            AxisStatusView axisStates = Find<AxisStatusView>(form);
+            ReadoutView readouts = Find<ReadoutView>(form);
+            Control selectedReadout = readouts.Controls.Find("selectedReadout", true)[0];
+            Label[] stateRows = (Label[])typeof(AxisStatusView).GetField("states", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(axisStates);
+            Check(!selectedReadout.Visible && !stateRows[2].Visible, "Selected X axis must not repeat its readout or status");
+            motion.SelectedMotor.SelectedItem = 2; Pump(250);
+            Check(!selectedReadout.Visible && !stateRows[2].Visible, "Selected Y axis must not repeat its readout or status");
+            motion.SelectedMotor.SelectedItem = 3; Pump(250);
+            Check(selectedReadout.Visible && stateRows[2].Visible, "Independent third motor retains its readout and status");
+            motion.SelectedMotor.SelectedItem = 1; Pump(250);
+            Check(FindButton(form, "停止").Visible && FindButton(motion, "停止运动") == null && FindButton(programs, "打开/编辑") == null,
+                "Global stop remains available while duplicate stop and editor entry are removed");
+            Screenshot(form, Path.Combine(output, "manual-deduplicated.png"));
+            Check(axisStates.EnableButton.Visible && axisStates.DisableButton.Visible && axisStates.EnableButton != axisStates.DisableButton,
+                "Manual control retains separate visible enable and disable buttons");
+            Check(!FindButton(path, "导入 DXF").Visible && !FindButton(path, "生成规划").Visible && !FindButton(path, "运行").Visible,
+                "Drawing and planning tools must not occupy the manual page");
+            Check(axisStates.EnableButton.FlatStyle == FlatStyle.Standard && axisStates.DisableButton.FlatStyle == FlatStyle.Standard,
+                "Axis enable controls retain standard WinForms button styling");
             motion.Target.Value = 100;
             motion.MoveButton.PerformClick();
             Pump(600);
@@ -279,6 +301,8 @@ internal static class SmokeTests
             Pump(80); double captureLost = Position(session, form); Pump(80);
             Check(Position(session, form) == captureLost, "Lost mouse capture must stop continuous jogging");
             path.Pages.SelectedTab = path.ProgramPage;
+            Check(!FindButton(path, "生成规划").Visible && connection.Visible,
+                "Program page hides drawing tools while keeping global connection available");
             programs.Command.Text = "VERSION"; programs.SendButton.PerformClick();
             Until(delegate { return programs.Response.Text.IndexOf("simulator") >= 0; }, "Command response must render");
             Screenshot(form, Path.Combine(output, "commands-and-programs.png"));
@@ -293,6 +317,9 @@ internal static class SmokeTests
             Check(form.RectangleToScreen(form.ClientRectangle).Contains(stop.RectangleToScreen(stop.ClientRectangle)), "Stop must fit at minimum window size");
             Check(!motion.AutoScroll && canvases.DrawingCanvas.Settings.PlotArea(canvases.DrawingCanvas.ClientRectangle).Height > 120,
                 "Usable canvas plots must remain visible at minimum size");
+            Button plan = FindButton(path, "生成规划");
+            Check(plan.Visible && form.RectangleToScreen(form.ClientRectangle).Contains(plan.RectangleToScreen(plan.ClientRectangle)),
+                "Planning action fits the drawing page at minimum window size");
             path.Pages.SelectedTab = path.ProgramPage; Pump(100);
             Check(form.RectangleToScreen(form.ClientRectangle).Contains(programs.SendButton.RectangleToScreen(programs.SendButton.ClientRectangle)) &&
                 form.RectangleToScreen(form.ClientRectangle).Contains(programs.DownloadButton.RectangleToScreen(programs.DownloadButton.ClientRectangle)),
@@ -321,7 +348,7 @@ internal static class SmokeTests
         canvases.Follow.Checked = true;
         DrawMouse(canvases.DrawingCanvas, "OnMouseDown", -4, -3); Pump(350);
         DrawMouse(canvases.DrawingCanvas, "OnMouseMove", 4, 3); Pump(350);
-        Check(!motion.MoveButton.Enabled && !programs.SendButton.Enabled && motion.StopButton.Enabled,
+        Check(!motion.MoveButton.Enabled && !programs.SendButton.Enabled && FindButton(form, "停止").Enabled,
             "Drawing follow must lock competing commands while preserving stop");
         Check(Math.Abs(Position(session, form) - 400) < 10 && Math.Abs(Position(session, form, 2) - 300) < 10,
             "Mouse mm target must move both simulated axes through their conversion scales");
@@ -374,7 +401,7 @@ internal static class SmokeTests
         programs.Command.Clear();
         Screenshot(form, Path.Combine(output, "dual-canvases.png"));
         PathView path = Find<PathView>(form); path.Pages.SelectedTab = path.ProgramPage;
-        programs.EditButton.PerformClick(); Pump(100);
+        Pump(100);
         ProgramEditorForm editor = (ProgramEditorForm)typeof(Form1).GetField("editorWindow", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(form);
         editor.Editor.Text = "OPEN PROG 1\r\n; 在此编辑 PMAC 程序\r\nCLOSE";
         Screenshot(form, Path.Combine(output, "program-editor.png")); editor.Editor.Clear();

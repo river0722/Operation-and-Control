@@ -24,6 +24,7 @@ namespace Operations_Control.Views
 
         public void Append(string level, string message)
         {
+            if (IsDisposed || Disposing || entries.IsDisposed) return;
             string line = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff") + "  [" + level + "]  " + message.Replace("\r", " ").Replace("\n", " ") + Environment.NewLine;
             try
             {

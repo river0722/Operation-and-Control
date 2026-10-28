@@ -58,7 +58,11 @@ namespace Operations_Control.Communication
             Invoke("GetResponseEx", arguments);
             string response = (string)arguments[3];
             int status = (int)arguments[4];
-            CommandResult.Validate(response, status);
+            try { CommandResult.Validate(response, status); }
+            catch (Exception error)
+            {
+                throw new InvalidOperationException("PMAC 命令 [" + command + "] 失败：" + error.Message, error);
+            }
             return new CommandResult(response, status);
         }
 
@@ -66,9 +70,44 @@ namespace Operations_Control.Communication
         {
             if (!IsConnected) throw new InvalidOperationException("设备未连接。");
             if (!File.Exists(filePath)) throw new FileNotFoundException("程序文件不存在。", filePath);
+            string logPath = Path.ChangeExtension(filePath, ".LOG");
+            DateTime startedAt = DateTime.UtcNow;
             object[] arguments = { deviceNumber, filePath, false, false, true, true, false };
             Invoke("Download", arguments);
             if (!(bool)arguments[6]) throw new InvalidOperationException("程序下载失败，请查看 PcommServer 生成的下载日志。");
+
+            // PcommServer can return true when the transfer operation completed even
+            // though PMAC rejected individual lines. The generated .LOG is the
+            // authoritative result for a compiled download.
+            DownloadLogFailure failure = ReadDownloadLog(logPath, startedAt);
+            if (failure != null)
+                throw new InvalidOperationException("PMAC 程序下载失败：" + failure.Message + "；日志：" + logPath);
+        }
+
+        private sealed class DownloadLogFailure
+        {
+            public string Message;
+        }
+
+        private static DownloadLogFailure ReadDownloadLog(string logPath, DateTime startedAt)
+        {
+            if (!File.Exists(logPath)) return null;
+            FileInfo info = new FileInfo(logPath);
+            if (info.LastWriteTimeUtc < startedAt.AddSeconds(-1)) return null;
+            string[] lines = File.ReadAllLines(logPath);
+            foreach (string line in lines)
+            {
+                if (line.IndexOf("**PMAC Error", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    line.IndexOf("Download aborted", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return new DownloadLogFailure { Message = line.Trim() };
+            }
+            foreach (string line in lines)
+            {
+                if (line.IndexOf("Total Errors:", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    !line.TrimEnd().EndsWith("0", StringComparison.Ordinal))
+                    return new DownloadLogFailure { Message = line.Trim() };
+            }
+            return null;
         }
 
         public void Disconnect()

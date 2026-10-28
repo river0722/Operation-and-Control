@@ -40,6 +40,7 @@ namespace Operations_Control
         private DiagnosticsView diagnostics;
         private AlarmService alarms;
         private bool disconnectPending, closePending;
+        private bool loadingConfiguration;
 
         public Form1()
         {
@@ -63,11 +64,14 @@ namespace Operations_Control
             IntegrateViews();
             WireEvents();
             manual.StatusChanged += delegate { if (!IsDisposed) Report(manual.StatusText, manual.StatusError); };
+            manual.TimingRecorded += delegate(string text) { if (!IsDisposed) log.Append("耗时", text); };
             alarms.Transition += delegate(AlarmRecord alarm) { log.Append(alarm.Active ? "报警" : "恢复", alarm.Source + "：" + alarm.Message + "；" + alarm.Advice); };
             alarms.Changed += delegate
             {
                 if (IsDisposed) return;
-                diagnostics.ShowAlarms(alarms); alarmSummary.Text = "当前报警：" + alarms.ActiveCount + " · 点击查看";
+                diagnostics.ShowAlarms(alarms);
+                alarmSummary.Text = alarms.ActiveCount == 0 ? "无报警 · 点击查看诊断" : "当前报警：" + alarms.ActiveCount + " · 点击查看";
+                alarmSummary.ForeColor = alarms.ActiveCount == 0 ? UiTheme.Muted : UiTheme.Danger;
                 for (int i = alarms.History.Count - 1; i >= 0; i--) if (alarms.History[i].Active) { alarmSummary.Text += " · " + alarms.History[i].Source + " " + alarms.History[i].Message; break; }
             };
             alarmSummary.Click += delegate { pathView.Pages.SelectedIndex = pathView.Pages.TabPages.Count - 1; diagnostics.SelectAlarms(); };
@@ -93,8 +97,6 @@ namespace Operations_Control
             UpdateState();
             log.Append("信息", "请选择连接模式并连接设备。模拟模式不会访问实际控制卡。");
         }
-
-        private void ShowEditor(object sender, EventArgs e) { pathView.Pages.SelectedTab = pathView.ProgramPage; editorWindow.Editor.Focus(); }
 
         private void IntegrateViews()
         {
@@ -123,7 +125,8 @@ namespace Operations_Control
             logPage = new TabPage("日志"); logWindow.TopLevel = false; logWindow.FormBorderStyle = FormBorderStyle.None; logWindow.MinimumSize = Size.Empty; logWindow.Dock = DockStyle.Fill;
             logPage.Controls.Add(logWindow); pathView.Pages.TabPages.Add(logPage); logWindow.Show();
             axisStates = new AxisStatusView { Dock = DockStyle.Fill };
-            manualLayout.RowCount = 4; manualLayout.RowStyles[2].SizeType = SizeType.Absolute; manualLayout.RowStyles[2].Height = 118;
+            manualLayout.RowCount = 4; manualLayout.Height = 546; manualLayout.RowStyles[0].Height = 142;
+            manualLayout.RowStyles[2].SizeType = SizeType.Absolute; manualLayout.RowStyles[2].Height = 132;
             manualLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); manualLayout.Controls.Add(axisStates, 0, 2);
             diagnostics = new DiagnosticsView { Dock = DockStyle.Fill };
             TabPage diagnosticsPage = new TabPage("诊断与配置"); diagnosticsPage.Controls.Add(diagnostics); pathView.Pages.TabPages.Add(diagnosticsPage);
@@ -137,6 +140,7 @@ namespace Operations_Control
                 DisplayPosition(sample.XCounts, sample.YCounts);
             };
             globalStop.Click += delegate { StopMonitoredAxes(); };
+            globalRecover.Click += delegate { RecoverControl(); };
             pathView.Pages.Selecting += delegate { StopJog(); CancelDrawing(); };
         }
 
@@ -149,7 +153,7 @@ namespace Operations_Control
                 {
                     connected = opened;
                     operations.FeedbackStale = false;
-                    if (opened) { if (!simulation) canvases.AxisMappingChanged(); pathView.ResumePolling(); }
+                    if (opened) { if (!simulation) { LoadSavedConfiguration(false); canvases.AxisMappingChanged(); } pathView.ResumePolling(); }
                     feedbackService.Clear(); samplesReady = false; currentSamples = null; canvases.BreakTrace();
                     Report(opened ? "已连接 " + session.DeviceName : "已取消设备选择。", false);
                     UpdateState(); if (connected) RefreshData(null, EventArgs.Empty);
@@ -158,14 +162,14 @@ namespace Operations_Control
             connection.DisconnectButton.Click += delegate { Disconnect(false); };
             connection.Mode.SelectedIndexChanged += delegate
             {
-                if (!connected && !busy) { canvases.ConfigureMode(connection.IsSimulation); configuration = NewConfiguration(connection.IsSimulation); motionGuard.Configuration = configuration; diagnostics.ShowProfile(configuration, motion.Motor); UpdateState(); }
+                if (!connected && !busy) { canvases.ConfigureMode(connection.IsSimulation); configuration = NewConfiguration(connection.IsSimulation); motionGuard.Configuration = configuration; if (!connection.IsSimulation) LoadSavedConfiguration(false); UpdateState(); }
             };
             motion.JogStarted += StartJog;
             motion.JogReleased += delegate { StopJog(); };
             motion.MoveButton.Click += delegate
             {
-                int motor = motion.Motor; decimal target = motion.Target.Value; decimal speed = motion.Speed.Value;
-                TryMotion(delegate { manual.Move(motor, target, speed); });
+                int motor = motion.Motor; decimal target = motion.Target.Value; decimal speed = motion.Speed.Value; decimal acceleration = motion.Acceleration.Value;
+                TryMotion(delegate { manual.Move(motor, target, speed, acceleration); });
             };
             motion.ZeroButton.Click += delegate
             {
@@ -183,7 +187,6 @@ namespace Operations_Control
                 Run("正在设置速度…", delegate { session.SetSpeed(x, speed); if (x != y) session.SetSpeed(y, speed); },
                     delegate { Report("X / Y 轴点动速度已写入并回读确认：" + speed + " ct/ms。", false); });
             };
-            motion.StopButton.Click += delegate { StopMonitoredAxes(); };
             EventHandler axesChanged = delegate { CancelDrawing(); canvases.AxisMappingChanged(); ResetSamples(); UpdateState(); };
             motion.XMotor.SelectedIndexChanged += axesChanged;
             motion.YMotor.SelectedIndexChanged += axesChanged;
@@ -195,6 +198,7 @@ namespace Operations_Control
                 TryMotion(delegate { manual.SetEnabled(motion.Motor, false); });
             };
             axisStates.ResetButton.Click += delegate { TryMotion(delegate { manual.Reset(motion.Motor); }); };
+            axisStates.RepairOutputButton.Click += delegate { RepairPulseOutput(); };
             diagnostics.ApplyButton.Click += delegate
             {
                 TryMotion(delegate
@@ -226,7 +230,6 @@ namespace Operations_Control
             };
             programs.BrowseButton.Click += delegate { OpenProgram(); };
             programs.SaveButton.Click += delegate { SaveProgram(); };
-            programs.EditButton.Click += ShowEditor;
             editorWindow.SaveRequested += delegate { if (programs.SaveButton.Enabled) SaveProgram(); };
             programs.DownloadButton.Click += delegate { DownloadProgram(); };
             canvases.DrawingCanvas.StrokeStarted += BeginDrawing;
@@ -240,7 +243,8 @@ namespace Operations_Control
                 follower.Cancel(); if (active) manual.Stop(new int[] { motion.XAxis, motion.YAxis }); UpdateState();
             };
             canvases.Follow.CheckedChanged += delegate { if (!canvases.Follow.Checked) CancelDrawing(); };
-            canvases.SettingsApplied += delegate { CancelDrawing(); SyncMappedAxes(); diagnostics.ShowAxisParameters(configuration, motion.Motor); UpdateState(); };
+            canvases.SettingsApplied += delegate { CancelDrawing(); SyncMappedAxes(); diagnostics.ShowAxisParameters(configuration, motion.Motor); PersistCurrentConfiguration(); UpdateState(); };
+            pathView.PlanningSettingsChanged += delegate { PersistCurrentConfiguration(); };
             canvases.MappingChanged += delegate { CancelDrawing(); UpdateState(); };
             follower.Failed += delegate { CancelDrawing(); if (connected && !shuttingDown) manual.Stop(new int[] { motion.XAxis, motion.YAxis }); Report(follower.Error, true); };
             Deactivate += delegate { StopJog(); CancelDrawing(); }; FormClosing += CloseForm;
@@ -249,6 +253,7 @@ namespace Operations_Control
                 if (e.KeyCode == Keys.Escape) { StopMonitoredAxes(); e.SuppressKeyPress = true; }
             };
             FormClosed += delegate { refreshTimer.Stop(); drawTimer.Stop(); feedbackService.Dispose(); session.Dispose(); };
+            if (!connection.IsSimulation) LoadSavedConfiguration(false);
         }
 
         private void ResetSamples()
@@ -265,6 +270,36 @@ namespace Operations_Control
         }
         private void TryMotion(Action action)
         { try { action(); } catch (Exception error) { Report(error.Message, true); } }
+        private void RecoverControl()
+        {
+            if (!manual.CanRecover) return;
+            if (!connection.IsSimulation && MessageBox.Show(this,
+                "将取消原动作，并对 X、Y 和所选监测轴去使能，电机保持力会撤销。\r\n" +
+                "请先确认机械支撑与抱闸。恢复后保持去使能，原动作不会续跑。是否继续？",
+                "解除等待并去使能", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK) return;
+            TryMotion(delegate
+            {
+                disconnectPending = closePending = false;
+                CancelDrawing();
+                manual.Recover(MonitoredAxes(), pathView.PrepareRecovery, delegate { return pathView.RecoveryReady; }, delegate { pathView.CompleteRecovery(); });
+            });
+        }
+        private void RepairPulseOutput()
+        {
+            if (!connected || connection.IsSimulation) return;
+            int selected = motion.Motor; PulseOutputConfiguration candidate = null;
+            PulseOutputRepair repair = new PulseOutputRepair(session);
+            Run("正在核对所选轴脉冲输出与反馈通道…", delegate { candidate = repair.Inspect(selected); }, delegate
+            {
+                if (!candidate.NeedsRepair) { Report(candidate.Description + "；无需修改。", false); return; }
+                if (MessageBox.Show(this, candidate.Description + "。\r\n" +
+                    "确认该驱动器接在对应 C 通道的脉冲／方向输出后，将修复输出地址并回读。\r\n" +
+                    "修复后保持去使能，不自动启动，也不写入永久存储。是否继续？",
+                    "修复脉冲输出", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK) return;
+                string result = null;
+                Run("正在修复脉冲输出…", delegate { result = repair.Repair(candidate); }, delegate { Report(result, false); });
+            });
+        }
         private void SyncMappedAxes()
         {
             if (!canvases.MappingReady) return;
@@ -276,30 +311,51 @@ namespace Operations_Control
         {
             TryMotion(delegate
             {
-                if (!canvases.MappingReady) throw new InvalidOperationException("请先应用并核对坐标参数。");
-                diagnostics.ApplyProfile(configuration);
-                CanvasSettings mapping = canvases.Settings;
-                configuration.XMotor = motion.XAxis; configuration.YMotor = motion.YAxis;
-                configuration.XMin = mapping.XMin; configuration.XMax = mapping.XMax; configuration.YMin = mapping.YMin; configuration.YMax = mapping.YMax;
-                configuration.XScale = mapping.XCountsPerUnit; configuration.YScale = mapping.YCountsPerUnit; configuration.DeviceName = connected ? session.DeviceName : configuration.DeviceName;
-                string path = DeviceConfigurationStore.ProfilePath(connection.IsSimulation); DeviceConfigurationStore.Save(path, configuration);
+                string path = PersistCurrentConfiguration();
                 diagnostics.ParameterResult.Text = "配置已保存：" + path; Report("设备配置已保存。", false);
             });
         }
-        private void LoadConfiguration()
+        private string PersistCurrentConfiguration()
         {
-            TryMotion(delegate
+            if (loadingConfiguration || !canvases.MappingReady) return null;
+            diagnostics.ApplyProfile(configuration); pathView.SavePlanningSettings(configuration);
+            CanvasSettings mapping = canvases.Settings;
+            configuration.XMotor = motion.XAxis; configuration.YMotor = motion.YAxis;
+            configuration.XMin = mapping.XMin; configuration.XMax = mapping.XMax; configuration.YMin = mapping.YMin; configuration.YMax = mapping.YMax;
+            configuration.XScale = mapping.XCountsPerUnit; configuration.YScale = mapping.YCountsPerUnit; configuration.DeviceName = connected ? session.DeviceName : configuration.DeviceName;
+            string path = DeviceConfigurationStore.ProfilePath(connection.IsSimulation); DeviceConfigurationStore.Save(path, configuration);
+            return path;
+        }
+        private bool LoadSavedConfiguration(bool report)
+        {
+            string path = DeviceConfigurationStore.ProfilePath(connection.IsSimulation);
+            if (!System.IO.File.Exists(path)) return false;
+            try
             {
-                DeviceConfiguration loaded = DeviceConfigurationStore.Load(DeviceConfigurationStore.ProfilePath(connection.IsSimulation));
-                if (connected && !connection.IsSimulation && loaded.DeviceName != session.DeviceName) throw new InvalidOperationException("配置设备与当前连接设备不一致，请选择对应设备。");
+                loadingConfiguration = true;
+                DeviceConfiguration loaded = DeviceConfigurationStore.Load(path);
+                if (connected && !connection.IsSimulation && !String.IsNullOrEmpty(loaded.DeviceName) && loaded.DeviceName != session.DeviceName) throw new InvalidOperationException("配置设备与当前连接设备不一致，请选择对应设备。");
+                if (connected && !connection.IsSimulation && String.IsNullOrEmpty(loaded.DeviceName)) loaded.DeviceName = session.DeviceName;
                 configuration = loaded; motionGuard.Configuration = loaded;
                 motion.XMotor.SelectedItem = loaded.XMotor; motion.YMotor.SelectedItem = loaded.YMotor;
                 canvases.XMin.Value = (decimal)loaded.XMin; canvases.XMax.Value = (decimal)loaded.XMax; canvases.YMin.Value = (decimal)loaded.YMin; canvases.YMax.Value = (decimal)loaded.YMax;
                 canvases.XScale.Value = (decimal)loaded.XScale; canvases.YScale.Value = (decimal)loaded.YScale;
+                pathView.ApplySavedPlanningSettings(loaded);
                 canvases.InvalidateLoadedMapping();
                 diagnostics.ShowProfile(configuration, motion.Motor); ResetSamples(); UpdateState();
-                Report("配置已载入；请核对设备、比例、行程和零点，再点击应用坐标。", false);
-            });
+                if (report) Report("配置已载入；请核对设备、比例、行程和零点，再点击应用坐标。", false);
+                return true;
+            }
+            catch (Exception error)
+            {
+                if (report) Report("配置载入失败：" + error.Message, true);
+                return false;
+            }
+            finally { loadingConfiguration = false; }
+        }
+        private void LoadConfiguration()
+        {
+            if (!LoadSavedConfiguration(true)) Report("没有找到可载入的配置文件。", true);
         }
         private void ReadIo()
         {
@@ -371,8 +427,10 @@ namespace Operations_Control
             canvases.SetState(connected && !shuttingDown && samplesReady && motion.XAxis != motion.YAxis,
                 manualBusy || shuttingDown || pathBusy, follower.Active);
             axisStates.Display(feedbackService.Latest, feedbackService.Fresh && connected, motion.Motor, manualBusy || follower.Active || pathBusy || shuttingDown);
+            axisStates.RepairOutputButton.Enabled = connected && !connection.IsSimulation && !manualBusy && !pathBusy && !follower.Active && !shuttingDown;
             diagnostics.Display(feedbackService.Latest, feedbackService.Fresh && connected, motion.Motor, manualBusy || follower.Active || pathBusy || shuttingDown);
             globalStop.Enabled = connected && !shuttingDown;
+            globalRecover.Enabled = connected && manual.CanRecover;
             if (pathView != null)
             {
                 pathView.UpdateContext(connection.IsSimulation, canvases.Settings, canvases.MappingReady, motion.XAxis, motion.YAxis, motion.Motor);
@@ -395,6 +453,7 @@ namespace Operations_Control
 
         private void Report(string message, bool error)
         {
+            if (IsDisposed || Disposing) return;
             feedback.Text = message; feedback.ForeColor = error ? UiTheme.Danger : UiTheme.Muted;
             log.Append(error ? "错误" : "信息", message);
         }
@@ -402,7 +461,7 @@ namespace Operations_Control
         private void StartJog(object sender, JogRequestEventArgs e)
         {
             decimal? step = motion.SingleStep.Checked ? (decimal?)motion.Step.Value : null;
-            TryMotion(delegate { manual.StartJog(e.Motor, e.Direction, motion.Speed.Value, step, null); });
+            TryMotion(delegate { manual.StartJog(e.Motor, e.Direction, motion.Speed.Value, step, motion.Acceleration.Value, null); });
         }
 
         private void StopJog()

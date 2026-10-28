@@ -23,6 +23,7 @@ namespace Operations_Control.Views
             XMotor.SelectedIndex = 0;
             YMotor.SelectedIndex = 1;
             SelectedMotor.SelectedIndex = 0;
+            reasons.SetToolTip(Acceleration, "定位加速度上限，单位 ct/ms²；控制器按速度与加速度计算总加速时间，并设置 S 曲线时间。");
             jogButtons = new Button[] { jogUpButton, jogLeftButton, jogRightButton, jogDownButton };
             WireJog(jogUpButton, delegate { return YAxis; }, 1);
             WireJog(jogLeftButton, delegate { return XAxis; }, -1);
@@ -63,11 +64,10 @@ namespace Operations_Control.Views
             // Keep the held button enabled so mouse capture survives until release.
             foreach (Button button in jogButtons) button.Enabled = connected && (!busy || jogging);
             XMotor.Enabled = YMotor.Enabled = SelectedMotor.Enabled = connected && !busy && !jogging;
-            Speed.Enabled = SingleStep.Enabled = connected && !busy && !jogging;
+            Speed.Enabled = Acceleration.Enabled = SingleStep.Enabled = connected && !busy && !jogging;
             Step.Enabled = connected && !busy && !jogging && SingleStep.Checked;
             Target.Enabled = connected && !busy && !jogging;
             MoveButton.Enabled = ZeroButton.Enabled = ApplySpeedButton.Enabled = connected && !busy && !jogging;
-            StopButton.Enabled = connected;
         }
         public void ApplyGuard(Operations_Control.Application.MotionGuard guard, ControllerFeedback feedback, bool fresh)
         {
@@ -80,7 +80,7 @@ namespace Operations_Control.Views
             AxisSample sample = feedback == null ? null : feedback.Find(Motor);
             string reason = guard.Reason(sample, sample == null ? 0 : Math.Sign((double)Target.Value - sample.Position), (double)Target.Value, Speed.Value, true);
             MoveButton.Enabled = MoveButton.Enabled && reason == null;
-            stopHint.Text = reason == null ? "停止作用于 X / Y 和所选电机" : "定位不可用：" + reason;
+            stopHint.Text = reason == null ? String.Empty : "定位不可用：" + reason;
             stopHint.ForeColor = reason == null ? System.Drawing.SystemColors.ControlText : System.Drawing.Color.Firebrick;
             reasons.SetToolTip(MoveButton, reason ?? "绝对定位；等待实际到位确认");
             ZeroButton.Enabled = ZeroButton.Enabled && sample != null && sample.Status != null && sample.Status.VelocityZero && sample.Status.InPosition;

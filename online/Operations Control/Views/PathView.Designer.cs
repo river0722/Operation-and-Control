@@ -12,6 +12,7 @@ namespace Operations_Control.Views
         private TabControl tabs;
         private TabPage drawingTab, programTab, analysisTab, deviceTab;
         private Label feedbackLabel, deviceLabel;
+        private PictureBox teamLogo;
         private Button importButton, clearButton, clearActualButton, undoButton, shapeButton, transformButton, planButton, runButton, saveProgramButton, analyzeButton, exportButton;
         private Button enableButton, disableButton, homeButton;
         private ComboBox shape, interpolation, homeTarget;
@@ -59,7 +60,16 @@ namespace Operations_Control.Views
             int height = 44;
             foreach (Control item in geometry.Controls)
                 if (item.Visible) height = System.Math.Max(height, item.Bottom + item.Margin.Bottom + 4);
-            ((TableLayoutPanel)geometry.Parent).RowStyles[0].Height = height;
+            ((TableLayoutPanel)geometry.Parent).RowStyles[2].Height = height;
+        }
+        private void ResizePlanning()
+        {
+            if (planning.Parent == null) return;
+            planning.PerformLayout();
+            int height = 44;
+            foreach (Control item in planning.Controls)
+                height = System.Math.Max(height, item.Bottom + item.Margin.Bottom + 4);
+            ((TableLayoutPanel)planning.Parent).RowStyles[3].Height = height;
         }
         public void AddCoordinateSettings(CanvasView canvases)
         {
@@ -74,7 +84,7 @@ namespace Operations_Control.Views
             importButton = ActionButton("导入 DXF"); clearButton = ActionButton("清空绘图"); undoButton = ActionButton("撤销"); shapeButton = ActionButton("添加"); transformButton = ActionButton("应用变换");
             clearActualButton = ActionButton("清空轨迹");
             planButton = ActionButton("生成规划"); runButton = ActionButton("运行"); saveProgramButton = ActionButton("保存程序"); analyzeButton = ActionButton("分析"); exportButton = ActionButton("导出数据");
-            enableButton = ActionButton("使能"); disableButton = ActionButton("失能"); homeButton = ActionButton("机械回零");
+            enableButton = ActionButton("X/Y 轴使能"); disableButton = ActionButton("X/Y 轴去使能"); homeButton = ActionButton("机械回零");
             shape = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 90 }; shape.Items.AddRange(new object[] { "直线", "圆", "圆弧", "五角星" }); shape.SelectedIndex = 1;
             interpolation = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 90 }; interpolation.Items.AddRange(new object[] { "PVT", "Spline1" }); interpolation.SelectedIndex = 0;
             homeTarget = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 100 }; homeTarget.Items.AddRange(new object[] { "X 轴", "Y 轴", "X/Y 两轴" }); homeTarget.SelectedIndex = 2;
@@ -91,27 +101,42 @@ namespace Operations_Control.Views
             analysisText = new TextBox { Multiline = true, ReadOnly = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, Font = new Font("Microsoft YaHei UI", 10) };
             pollTimer = new Timer(components); pollTimer.Interval = 50; pollTimer.Tick += Poll;
             SuspendLayout(); Font = new Font("Microsoft YaHei UI", 10);
-            root.Dock = DockStyle.Fill; root.ColumnCount = 1; root.RowCount = 3;
+            root.Dock = DockStyle.Fill; root.ColumnCount = 1; root.RowCount = 1;
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             actions.Dock = DockStyle.Fill; actions.WrapContents = false;
-            actions.Controls.AddRange(new Control[] { importButton, clearButton, clearActualButton, undoButton, planButton, runButton });
-            planning.Dock = DockStyle.Fill; planning.WrapContents = false;
+            actions.Controls.AddRange(new Control[] { importButton, undoButton, clearButton, clearActualButton });
+            planning.Dock = DockStyle.Fill; planning.WrapContents = true;
             Field(planning, "插补", interpolation); Field(planning, "速度 mm/s", speed); Field(planning, "加速度 mm/s²", acceleration); Field(planning, "间距 mm", spacing);
+            planning.Controls.AddRange(new Control[] { planButton, runButton });
+            teamLogo = new PictureBox { Name = "teamLogo", Image = Properties.Resources.TeamLogoBackground, Dock = DockStyle.Fill,
+                SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.Transparent, Margin = new Padding(8, 4, 12, 4), Padding = new Padding(6, 4, 6, 4),
+                TabStop = false, AccessibleName = "团队标识" };
             tabs.Dock = DockStyle.Fill; tabs.TabPages.AddRange(new TabPage[] { drawingTab, programTab, analysisTab, deviceTab });
-            TableLayoutPanel drawingLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
+            TableLayoutPanel drawingLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(4) };
             drawingLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            drawingLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); drawingLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            drawingLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+            drawingLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            drawingLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+            drawingLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+            drawingLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+            TableLayoutPanel drawingTools = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(0) };
+            drawingTools.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); drawingTools.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+            drawingTools.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            drawingTools.Controls.Add(actions, 0, 0); drawingTools.Controls.Add(teamLogo, 1, 0);
             geometry.Dock = DockStyle.Fill;
             Field(geometry, "图形", shape); Field(geometry, "X mm", centerX); Field(geometry, "Y mm", centerY); Field(geometry, "半径 mm", radius);
             Field(geometry, "终点 X", endX); Field(geometry, "Y", endY); Field(geometry, "起角°", startAngle); Field(geometry, "扫角°", sweepAngle); geometry.Controls.Add(shapeButton);
             shape.SelectedIndexChanged += delegate { UpdateShapeFields(); }; UpdateShapeFields();
             previewLayout.Dock = DockStyle.Fill; previewLayout.ColumnCount = 2; previewLayout.RowCount = 1;
             previewLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); previewLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); previewLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            previewLayout.Controls.Add(Plot("实际轨迹", actualCanvas), 0, 0); previewLayout.Controls.Add(Plot("绘图", drawingCanvas), 1, 0);
-            drawingLayout.Controls.Add(geometry, 0, 0); drawingLayout.Controls.Add(previewLayout, 0, 1); drawingTab.Controls.Add(drawingLayout);
+            previewLayout.Controls.Add(Plot("输入图形", drawingCanvas), 0, 0); previewLayout.Controls.Add(Plot("实际轨迹", actualCanvas), 1, 0);
+            readinessLabel.Dock = DockStyle.Fill; readinessLabel.Margin = new Padding(8, 0, 3, 0);
+            drawingLayout.Controls.Add(drawingTools, 0, 0); drawingLayout.Controls.Add(previewLayout, 0, 1);
+            drawingLayout.Controls.Add(geometry, 0, 2); drawingLayout.Controls.Add(planning, 0, 3); drawingLayout.Controls.Add(readinessLabel, 0, 4); drawingTab.Controls.Add(drawingLayout);
             geometry.SizeChanged += delegate { ResizeGeometry(); };
             geometry.ControlAdded += delegate { ResizeGeometry(); };
+            planning.SizeChanged += delegate { ResizePlanning(); };
             TableLayoutPanel programLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
             programLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             programLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40)); programLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -124,7 +149,7 @@ namespace Operations_Control.Views
             analysisLayout.Controls.Add(analysisActions, 0, 0); analysisLayout.Controls.Add(analysisText, 0, 1); analysisTab.Controls.Add(analysisLayout);
             settingsLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 7, Padding = new Padding(6) };
             settingsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            foreach (int height in new int[] { 54, 44, 34, 84, 48, 44 }) settingsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+            foreach (int height in new int[] { 54, 44, 34, 84, 88, 44 }) settingsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
             settingsLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             advanced = new FlowLayoutPanel { Dock = DockStyle.Fill };
             Field(advanced, "坐标系", coordinate); Field(advanced, "程序号", programNumber); Field(advanced, "DXF 比例", unitlessScale); Field(advanced, "模拟滞后 ms", lag);
@@ -136,7 +161,7 @@ namespace Operations_Control.Views
             transforms = new FlowLayoutPanel { Dock = DockStyle.Fill };
             Field(transforms, "缩放", scale); Field(transforms, "偏移 X mm", offsetX); Field(transforms, "Y mm", offsetY); transforms.Controls.Add(transformButton); settingsLayout.Controls.Add(transforms, 0, 5);
             deviceTab.Controls.Add(settingsLayout);
-            root.Controls.Add(actions, 0, 0); root.Controls.Add(planning, 0, 1); root.Controls.Add(tabs, 0, 2); Controls.Add(root);
+            root.Controls.Add(tabs, 0, 0); Controls.Add(root);
             AutoScaleMode = AutoScaleMode.Dpi; Size = new Size(1160, 680); Margin = new Padding(0);
             ResumeLayout(false);
         }

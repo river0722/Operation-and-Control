@@ -18,7 +18,6 @@
             this.xReadout = new Operations_Control.Controls.AxisReadout();
             this.yReadout = new Operations_Control.Controls.AxisReadout();
             this.selectedReadout = new Operations_Control.Controls.AxisReadout();
-            this.freshness = new System.Windows.Forms.Label();
             this.readoutGroup.SuspendLayout();
             this.readoutsLayout.SuspendLayout();
             this.SuspendLayout();
@@ -38,7 +37,7 @@
             this.readoutsLayout.Margin = new System.Windows.Forms.Padding(0);
             this.readoutsLayout.Padding = new System.Windows.Forms.Padding(0);
             this.readoutsLayout.ColumnCount = 1;
-            this.readoutsLayout.RowCount = 4;
+            this.readoutsLayout.RowCount = 3;
             // xReadout
             this.xReadout.Name = "xReadout";
             this.xReadout.TabIndex = 2;
@@ -57,23 +56,13 @@
             this.selectedReadout.Dock = System.Windows.Forms.DockStyle.Fill;
             this.selectedReadout.Margin = new System.Windows.Forms.Padding(0);
             this.selectedReadout.Caption = "所选电机 / 1";
-            // freshness
-            this.freshness.Name = "freshness";
-            this.freshness.TabIndex = 5;
-            this.freshness.Text = "反馈单位 ct；速度单位 ct/ms";
-            this.freshness.Font = new System.Drawing.Font("Microsoft YaHei UI", 9.5F, System.Drawing.FontStyle.Regular);
-            this.freshness.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.freshness.Margin = new System.Windows.Forms.Padding(2);
-            this.freshness.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             this.readoutsLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
             this.readoutsLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 36F));
             this.readoutsLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 36F));
             this.readoutsLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 36F));
-            this.readoutsLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.readoutsLayout.Controls.Add(this.xReadout, 0, 0);
             this.readoutsLayout.Controls.Add(this.yReadout, 0, 1);
             this.readoutsLayout.Controls.Add(this.selectedReadout, 0, 2);
-            this.readoutsLayout.Controls.Add(this.freshness, 0, 3);
             this.readoutGroup.Controls.Add(this.readoutsLayout);
             this.Controls.Add(this.readoutGroup);
             this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
@@ -97,6 +86,5 @@
         private Operations_Control.Controls.AxisReadout xReadout;
         private Operations_Control.Controls.AxisReadout yReadout;
         private Operations_Control.Controls.AxisReadout selectedReadout;
-        private System.Windows.Forms.Label freshness;
     }
 }

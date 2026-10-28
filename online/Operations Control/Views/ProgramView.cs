@@ -12,7 +12,7 @@ namespace Operations_Control.Views
             SendButton.Enabled = connected && !busy;
             Command.Enabled = !busy;
             DownloadButton.Enabled = connected && !busy && hasFile;
-            BrowseButton.Enabled = SaveButton.Enabled = EditButton.Enabled = !busy;
+            BrowseButton.Enabled = SaveButton.Enabled = !busy;
         }
     }
 }

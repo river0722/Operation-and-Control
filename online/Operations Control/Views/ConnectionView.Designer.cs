@@ -20,7 +20,8 @@ namespace Operations_Control.Views
             connectionGroup = new System.Windows.Forms.GroupBox { Text = "通讯", Dock = System.Windows.Forms.DockStyle.Fill, Padding = new System.Windows.Forms.Padding(8), Font = new System.Drawing.Font("Microsoft YaHei UI", 11, System.Drawing.FontStyle.Bold) };
             connectionLayout = new System.Windows.Forms.TableLayoutPanel { Dock = System.Windows.Forms.DockStyle.Fill, ColumnCount = 5, RowCount = 1 };
             connectionLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100));
-            foreach (int width in new int[] { 25, 16, 16, 18, 25 }) connectionLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, width));
+            foreach (int width in new int[] { 170, 90, 90, 130 }) connectionLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, width));
+            connectionLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100));
             Mode = new System.Windows.Forms.ComboBox { DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList, Dock = System.Windows.Forms.DockStyle.Fill, Margin = new System.Windows.Forms.Padding(3, 5, 3, 3), Font = new System.Drawing.Font("Microsoft YaHei UI", 10) };
             Mode.Items.AddRange(new object[] { "模拟模式", "PMAC 实机" });
             ConnectButton = new System.Windows.Forms.Button { Text = "连接", Dock = System.Windows.Forms.DockStyle.Fill, Font = new System.Drawing.Font("Microsoft YaHei UI", 10) };
