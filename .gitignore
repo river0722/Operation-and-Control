@@ -14,3 +14,19 @@ Desktop.ini
 
 # Local workspace caches and review intermediates
 /.local/
+/.tmp-docx/
+/tmp/
+
+# Keep Git focused on the upper-computer application
+/artifacts/
+/assets/
+/demos/
+/references/
+/reports/
+/docs/*
+!/docs/README.md
+!/docs/software/
+/examples/*
+!/examples/course-shapes.dxf
+/scripts/*
+!/scripts/build.ps1

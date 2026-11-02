@@ -1,5 +1,0 @@
-SOURCE: live controller LIST readback attempt, 2026-10-31; requested prefix words 0..127.
-Not a complete program; not tied to the historical DXF run.
-
-LIST PROG 20,0,32 [controller_error]
-ERR003

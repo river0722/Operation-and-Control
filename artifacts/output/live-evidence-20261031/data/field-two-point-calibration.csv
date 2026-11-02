@@ -1,3 +1,0 @@
-﻿status,point,target_x_mm,target_y_mm,expected_x_ct,expected_y_ct,controller_x_ct,controller_y_ct,measured_x_mm,measured_y_mm,error_x_mm,error_y_mm,instrument,speed_mm_s,timestamp,operator,evidence
-TODO,1,,,,,,,,,,,,,,,
-TODO,2,,,,,,,,,,,,,,,
