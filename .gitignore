@@ -12,5 +12,5 @@ __pycache__/
 Thumbs.db
 Desktop.ini
 
-# Local review and rendering intermediates
-/tmp/
+# Local workspace caches and review intermediates
+/.local/

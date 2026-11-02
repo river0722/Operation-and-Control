@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "backend": "native",
+  "rasterEngine": "libreoffice",
+  "source": "saved",
+  "inputPath": "D:\\pmac资料\\output\\5.3_上位机绘图与CAD文件读取\\5.3_上位机绘图与CAD文件读取_修订版.docx",
+  "sourceSha256": "fa867961520c117553d3b5f064719ae65b5a19ead10cbf8300229892ed8bfdf0",
+  "dpi": 144,
+  "pageCount": 5,
+  "images": [
+    {
+      "index": 1,
+      "page": 4,
+      "path": "D:\\pmac资料\\output\\_rewrite_tmp\\check\\c\\page-0001.png",
+      "width": 1191,
+      "height": 1684,
+      "rectangle": {
+        "x": 0,
+        "y": 0,
+        "width": 793.7333333333333,
+        "height": 1122.5333333333333
+      },
+      "byteLength": 322597
+    }
+  ],
+  "missingFonts": [
+    "Courier"
+  ]
+}

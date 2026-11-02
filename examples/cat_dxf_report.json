@@ -1,0 +1,22 @@
+[
+  {
+    "file": "cat_centerline_machine_fit.dxf",
+    "strokes": 19,
+    "vertices": 276,
+    "xmin": -21.051,
+    "xmax": 181.051,
+    "ymin": -38.0,
+    "ymax": 177.0,
+    "units": "mm"
+  },
+  {
+    "file": "cat_outline_machine_fit.dxf",
+    "strokes": 7,
+    "vertices": 1062,
+    "xmin": -20.218,
+    "xmax": 180.218,
+    "ymin": -38.0,
+    "ymax": 177.0,
+    "units": "mm"
+  }
+]

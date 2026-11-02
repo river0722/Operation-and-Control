@@ -1,0 +1,79 @@
+namespace Operations_Control
+{
+    partial class Form1
+    {
+        private System.ComponentModel.IContainer components;
+        private System.Windows.Forms.TableLayoutPanel rootLayout, header, manualLayout;
+        private System.Windows.Forms.Panel contentPanel;
+        private System.Windows.Forms.TabControl workspaceTabs;
+        private System.Windows.Forms.TabPage drawingPage, manualPage, filePage, logPage;
+        private Operations_Control.Views.ConnectionView connection;
+        private Operations_Control.Views.ReadoutView readouts;
+        private Operations_Control.Views.ProgramView programs;
+        private Operations_Control.Views.MotionView motion;
+        private Operations_Control.Views.CanvasView canvases;
+        private System.Windows.Forms.Label feedback, xPosition, yPosition, alarmSummary;
+        private System.Windows.Forms.Button globalStop, globalRecover;
+        private System.Windows.Forms.Timer refreshTimer, drawTimer;
+        private System.Windows.Forms.OpenFileDialog programOpenDialog;
+        private System.Windows.Forms.SaveFileDialog programSaveDialog;
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && components != null) components.Dispose();
+            base.Dispose(disposing);
+        }
+        private void InitializeComponent()
+        {
+            components = new System.ComponentModel.Container();
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
+            programOpenDialog = new System.Windows.Forms.OpenFileDialog { Filter = "PMAC 程序 (*.txt;*.pmc)|*.txt;*.pmc|所有文件 (*.*)|*.*" };
+            programSaveDialog = new System.Windows.Forms.SaveFileDialog { FileName = "program.pmc", Filter = "PMAC 程序 (*.pmc)|*.pmc|文本文件 (*.txt)|*.txt" };
+            rootLayout = new System.Windows.Forms.TableLayoutPanel { Dock = System.Windows.Forms.DockStyle.Fill, ColumnCount = 1, RowCount = 4, Margin = new System.Windows.Forms.Padding(0) };
+            rootLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100));
+            rootLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 72));
+            rootLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100));
+            rootLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 64));
+            rootLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 32));
+            header = new System.Windows.Forms.TableLayoutPanel { Dock = System.Windows.Forms.DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = new System.Windows.Forms.Padding(0) };
+            header.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100));
+            header.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50));
+            header.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50));
+            header.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 140));
+            connection = new Operations_Control.Views.ConnectionView { Dock = System.Windows.Forms.DockStyle.Fill };
+            xPosition = new System.Windows.Forms.Label { Text = "X —", Dock = System.Windows.Forms.DockStyle.Fill, TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Font = new System.Drawing.Font("Consolas", 14), BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle, BackColor = System.Drawing.SystemColors.Window, Margin = new System.Windows.Forms.Padding(8, 10, 6, 10) };
+            yPosition = new System.Windows.Forms.Label { Text = "Y —", Dock = System.Windows.Forms.DockStyle.Fill, TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Font = new System.Drawing.Font("Consolas", 14), BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle, BackColor = System.Drawing.SystemColors.Window, Margin = new System.Windows.Forms.Padding(6, 10, 8, 10) };
+            globalStop = new System.Windows.Forms.Button { Text = "停止", Dock = System.Windows.Forms.DockStyle.Fill, Margin = new System.Windows.Forms.Padding(8, 10, 8, 10), ForeColor = System.Drawing.Color.Firebrick, Font = new System.Drawing.Font("Microsoft YaHei UI", 11, System.Drawing.FontStyle.Bold), AccessibleDescription = "停止监测轴；也可按 Esc" };
+            header.Controls.Add(xPosition, 0, 0); header.Controls.Add(yPosition, 1, 0); header.Controls.Add(globalStop, 2, 0);
+            contentPanel = new System.Windows.Forms.Panel { Dock = System.Windows.Forms.DockStyle.Fill, Margin = new System.Windows.Forms.Padding(0) };
+            workspaceTabs = new System.Windows.Forms.TabControl { Dock = System.Windows.Forms.DockStyle.Fill };
+            drawingPage = new System.Windows.Forms.TabPage("绘图与运行"); manualPage = new System.Windows.Forms.TabPage("手动控制"); filePage = new System.Windows.Forms.TabPage("程序");
+            canvases = new Operations_Control.Views.CanvasView { Dock = System.Windows.Forms.DockStyle.Fill };
+            readouts = new Operations_Control.Views.ReadoutView { Dock = System.Windows.Forms.DockStyle.Fill };
+            motion = new Operations_Control.Views.MotionView { Dock = System.Windows.Forms.DockStyle.Fill };
+            programs = new Operations_Control.Views.ProgramView { Dock = System.Windows.Forms.DockStyle.Fill };
+            drawingPage.Controls.Add(canvases);
+            manualLayout = new System.Windows.Forms.TableLayoutPanel { Dock = System.Windows.Forms.DockStyle.Top, Height = 570, ColumnCount = 1, RowCount = 3 };
+            manualPage.AutoScroll = true;
+            manualLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 180));
+            manualLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 260));
+            manualLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100));
+            manualLayout.Controls.Add(readouts, 0, 0); manualLayout.Controls.Add(motion, 0, 1); manualPage.Controls.Add(manualLayout);
+            filePage.Controls.Add(programs); workspaceTabs.TabPages.AddRange(new System.Windows.Forms.TabPage[] { drawingPage, manualPage, filePage }); contentPanel.Controls.Add(workspaceTabs);
+            feedback = new System.Windows.Forms.Label { Dock = System.Windows.Forms.DockStyle.Fill, AutoEllipsis = true, TextAlign = System.Drawing.ContentAlignment.MiddleLeft, Text = "未连接", Margin = new System.Windows.Forms.Padding(3) };
+            alarmSummary = new System.Windows.Forms.Label { Dock = System.Windows.Forms.DockStyle.Fill, AutoEllipsis = true, TextAlign = System.Drawing.ContentAlignment.MiddleRight, Text = "无报警 · 点击查看诊断", ForeColor = Operations_Control.Controls.UiTheme.Muted, Margin = new System.Windows.Forms.Padding(3), Cursor = System.Windows.Forms.Cursors.Hand, AccessibleName = "当前报警，点击查看诊断" };
+            System.Windows.Forms.TableLayoutPanel footer = new System.Windows.Forms.TableLayoutPanel { Dock = System.Windows.Forms.DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = new System.Windows.Forms.Padding(0) };
+            footer.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 60)); footer.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 40));
+            footer.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 180));
+            globalRecover = new System.Windows.Forms.Button { Text = "解除等待并去使能", Dock = System.Windows.Forms.DockStyle.Fill, Margin = new System.Windows.Forms.Padding(3, 0, 3, 0) };
+            footer.Controls.Add(feedback, 0, 0); footer.Controls.Add(alarmSummary, 1, 0); footer.Controls.Add(globalRecover, 2, 0);
+            refreshTimer = new System.Windows.Forms.Timer(components); refreshTimer.Interval = 100; refreshTimer.Tick += RefreshData;
+            drawTimer = new System.Windows.Forms.Timer(components); drawTimer.Interval = 20; drawTimer.Tick += PumpDrawing;
+            rootLayout.Controls.Add(connection, 0, 0); rootLayout.Controls.Add(contentPanel, 0, 1); rootLayout.Controls.Add(header, 0, 2); rootLayout.Controls.Add(footer, 0, 3);
+            Controls.Add(rootLayout); AutoScaleDimensions = new System.Drawing.SizeF(96, 96); AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
+            Font = new System.Drawing.Font("Microsoft YaHei UI", 10); Padding = new System.Windows.Forms.Padding(6);
+            BackColor = System.Drawing.SystemColors.Control; ClientSize = new System.Drawing.Size(1180, 820); MinimumSize = new System.Drawing.Size(1040, 720);
+            Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon"))); KeyPreview = true; StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
+            Name = "Form1"; Text = "PMAC 上位机控制程序";
+        }
+    }
+}

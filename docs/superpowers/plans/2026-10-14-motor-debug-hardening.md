@@ -19,13 +19,13 @@
 - [x] Add `Models/DeviceConfiguration.cs`, `Files/DeviceConfigurationStore.cs` and `Views/DiagnosticsView.cs`. Save profiles separately for simulation and real devices; require explicit application of loaded calibration. Read back written speed, configure per-axis travel, reset command and optional I/O queries. Reset and enable operations wait for feedback confirmation.
 - [x] Add `Application/AlarmService.cs`; keep current alarms distinct from history and from acknowledgement. Extend `LogView.cs` to append UTF-8 daily logs and retain a bounded visible tail without erasing disk history. Test alarm transitions and log rollover beyond 500 entries.
 - [x] Update `Form1.cs`, `MotionView.cs`, `ReadoutView.cs` and designer layouts. Display live statuses, reasons for unavailable controls, actual/command position, following error and diagnostics trend. Preserve existing drawing/program workflow and minimum window usability.
-- [x] Add `Tests/MotorDebugTests.cs` to `online/build.ps1`; update existing fake sessions and stop assertions to the new confirmation semantics. Run Release suites, Debug build, inspect generated screenshots and update operation documentation.
+- [x] Add `tests/MotorDebugTests.cs` to `../../../scripts/build.ps1`; update existing fake sessions and stop assertions to the new confirmation semantics. Run Release suites, Debug build, inspect generated screenshots and update operation documentation.
 
 ## Validation commands
 
 ```powershell
-.\online\build.ps1 -Configuration Release -Test -ScreenshotDirectory 'D:\pmac资料\output\motor-debug-hardening'
-.\online\build.ps1 -Configuration Debug
+.\scripts\build.ps1 -Configuration Release -Test -ScreenshotDirectory '..\artifacts\output\motor-debug-hardening'
+.\scripts\build.ps1 -Configuration Debug
 git diff --check
 ```
 

@@ -1,0 +1,48 @@
+Create a polished Chinese software architecture diagram, landscape 1536x1024. This is a sparse, easy-to-understand framework diagram of an existing PMAC motion-control desktop program, for a project presentation. Prioritize low information density, generous whitespace and large readable Chinese text. White background, navy headings, muted blue and teal cards, thin precise connector arrows. Flat vector infographic aesthetic, restrained professional engineering style. No 3D, no screenshots, no decorative machinery, no gradients. Clear hierarchy. All Chinese text must render exactly and cleanly.
+
+Title at upper left: "PMAC 上位机软件框架"
+Small subtitle: "当前代码结构 · WinForms / .NET Framework 3.5 / x86"
+
+Composition: a main vertical flow of four broad cards in the center-left (roughly 65% width), with two small support cards stacked on the right (roughly 25% width). Leave substantial margins. The four main cards have numbered colored layer labels and short readable content. Avoid tiny class names or exhaustive lists.
+
+MAIN CARD 1:
+Heading "01  界面层"
+Small directory caption "Form1 · Views · Controls"
+Body "操作输入   /   状态显示   /   轨迹绘制"
+
+MAIN CARD 2:
+Heading "02  应用业务层"
+Small directory caption "Application"
+Body line 1 "手动控制   /   路径运行   /   回零流程"
+Body line 2 "共享反馈   /   运动保护   /   报警管理"
+
+MAIN CARD 3:
+Heading "03  通信层"
+Small directory caption "Communication"
+Body "控制器会话   →   STA 串行队列   →   传输适配"
+
+MAIN CARD 4:
+Heading "04  设备与仿真"
+Inside, two clearly separated side-by-side small subpanels:
+Left: "实机分支" and "PcommServer COM → PMAC 控制器"
+Right: "模拟分支" and "SimulatorTransport"
+The simulation branch must NOT be drawn as connected to the physical controller. Main card 3 connects separately to these two subpanels, through two forked arrows.
+
+Connect main cards 1 → 2 → 3 with solid thin downward arrows to show main command flow. On the left of this stack show a single thin teal upward feedback arrow from communication layer back to the UI layer, labeled "状态反馈". Do not draw many crossing arrows. Application layer receives shared feedback in actual implementation; feedback arrow can have a small junction pointing into application layer. Do not suggest UI updates occur on STA thread.
+
+RIGHT SUPPORT CARD A (aligned near application layer):
+Heading "运动算法"
+Small caption "Motion"
+Body "几何路径 · 轨迹规划 · 误差分析"
+One thin connector from application card to this support card, labeled "调用".
+
+RIGHT SUPPORT CARD B (below support A):
+Heading "文件与数据支持"
+Small caption "Files · Models"
+Body line 1 "DXF / 程序 / 配置 / 报告"
+Body line 2 "路径、反馈与设备数据模型"
+No elaborate connectivity; this is shared supporting infrastructure and not a mandatory serial pipeline.
+
+At bottom, one unobtrusive single line note: "按职责分层展示；当前为单个 C# 项目。"
+
+Only include the exact title, subtitle, card labels, bodies, arrow labels, and bottom note specified above. Do not add camera, computer vision, database, web service, networking protocols, future features, legends, side explanations, or additional modules. Layout must be airy, carefully aligned, balanced, readable at normal viewing size. Main Chinese layer headings largest after title. English captions secondary. Important: this is a responsibility overview, not a strict exhaustive dependency graph.

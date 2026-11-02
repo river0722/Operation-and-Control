@@ -1,0 +1,6 @@
+﻿Connection: none; simulation mode selected; mouse follow off.
+Drawing demo: 4 shape-button operations plus 1 freehand stroke through MotionCanvas mouse event handlers.
+CAD evidence: DxfReader.Read(file,0.01,1) -> PathView.LoadDrawing; native file picker bypassed.
+DrawingPath strokes=7; points=102; displayed status=DXF · 单位转换比例 1 mm/单位 · 7 笔画 / 102 点
+Screenshots: actual WinForms DrawToBitmap rendering in an isolated off-screen test instance; no fabricated UI.
+Assembly=D:\pmac资料\tmp\section53-runtime\Operations Control.exe

@@ -9,7 +9,7 @@
 **Tech Stack:** C#, WinForms, .NET Framework 3.5, x86, PcommServer COM, existing simulator.
 
 ### Task 1: Establish the baseline
-- [x] Run `online/build.ps1 -Test -ScreenshotDirectory "$env:TEMP\pmac-modular-baseline"`; retain the simulation results and screenshots.
+- [x] Run `../scripts/build.ps1 -Test -ScreenshotDirectory "$env:TEMP\pmac-modular-baseline"`; retain the simulation results and screenshots.
 - [x] Record Designer.cs and resx content; their layouts remain untouched.
 
 ### Task 2: Establish module boundaries

@@ -1,0 +1,9 @@
+{
+  "LocalAddress": "192.6.94.2",
+  "LocalPort": 1839,
+  "RemoteAddress": "192.6.94.5",
+  "RemotePort": 1025,
+  "State": 5,
+  "OwningProcess": 25520,
+  "CreationTime": "2026-10-31T13:36:34+08:00"
+}

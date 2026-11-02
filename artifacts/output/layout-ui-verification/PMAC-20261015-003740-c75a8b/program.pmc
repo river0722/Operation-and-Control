@@ -1,0 +1,20 @@
+; Generated XY trajectory. Units: mm, mm/s, milliseconds.
+; Reserved coordinate system and program must be verified before hardware use.
+; I42=0 selects TM timing globally. Isx90=1000 selects seconds for velocity.
+CLOSE
+&1
+#1->100X
+#2->100Y
+I42=0
+I5190=1000
+OPEN PROG 20 CLEAR
+ABS
+; DRAW stroke
+PVT307.05502729
+X0.33333333:1.08558175 Y0.33333333:1.08558175
+PVT307.05502729
+X0.66666667:1.08558175 Y0.66666667:1.08558175
+PVT307.05502729
+X1:0 Y1:0
+DWELL0
+CLOSE

@@ -1,0 +1,21 @@
+{
+  "captured_at_utc": "2026-10-31T05:39:29.661Z",
+  "window": {
+    "app": "process:D:\\pmac资料\\src\\Operations Control\\bin\\Debug\\Operations Control.exe",
+    "id": 11142810,
+    "title": "PMAC 上位机控制程序"
+  },
+  "accessibility": {
+    "tree": "Window: \"PMAC 上位机控制程序\", App: Operations Control.exe.\n\t0 窗口 PMAC 上位机控制程序 Secondary Actions: Raise\n\t\t1 标题栏 (settable, string) Value: PMAC 上位机控制程序"
+  },
+  "screenshots": [
+    {
+      "height": 1278,
+      "id": "screenshot-0",
+      "originX": 394,
+      "originY": 120,
+      "width": 1772,
+      "zIndex": 0
+    }
+  ]
+}

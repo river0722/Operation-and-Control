@@ -71,11 +71,11 @@
 
 ## 六、目录中的资料阅读顺序
 
-1. [TurboPMAC通信](D:/pmac资料/pmac资料/建立通信手册/TurboPMAC通信.pdf)：先保证电脑与控制卡的通信正常。
-2. [第7篇——上位机VS+C#编程](D:/pmac资料/pmac资料/上手教程/调试教程/000%20教程/第7篇——上位机VS+C%23编程.pptx)：入门窗体、按钮事件、COM 引用和通信调用。
-3. [PcommServer 手册](D:/pmac资料/pmac资料/调试文档/PMAC实用手册/PcommServer.pdf)：按前面的接口表局部阅读，不必从第一页读到最后。
-4. [Turbo PMAC 中文 SRM](D:/pmac资料/pmac资料/软件手册/TURBO%20PMAC(PMAC2)%20SRM（中文版）.pdf)：查询要发送的命令、参数单位和状态含义。
-5. [单轴学习路线](D:/pmac资料/PMAC零基础最快学习路线.md)：上位机运动功能所依赖的单轴基础。
+1. [TurboPMAC通信](../references/pmac/建立通信手册/TurboPMAC通信.pdf)：先保证电脑与控制卡的通信正常。
+2. [第7篇——上位机VS+C#编程](../references/pmac/上手教程/调试教程/000%20教程/第7篇——上位机VS+C%23编程.pptx)：入门窗体、按钮事件、COM 引用和通信调用。
+3. [PcommServer 手册](../references/pmac/调试文档/PMAC实用手册/PcommServer.pdf)：按前面的接口表局部阅读，不必从第一页读到最后。
+4. [Turbo PMAC 中文 SRM](<../references/pmac/软件手册/TURBO%20PMAC%28PMAC2%29%20SRM（中文版）.pdf>)：查询要发送的命令、参数单位和状态含义。
+5. [单轴学习路线](PMAC零基础最快学习路线.md)：上位机运动功能所依赖的单轴基础。
 
 第 7 篇是 2019 年的实例，里面使用 .NET Framework 3.5，不应把这个版本当成所有环境的固定要求。先按安装的 PcommServer 版本、厂商示例和实际兼容性选择目标框架；同时核对 x86/x64 与 COM 组件位数。教程中出现了 PCOMMSERVERLib 和 PMACSERVERLib 等不同名称，具体命名空间、类名、方法签名以本机生成的引用为准。按资料路线，先考虑 WinForms 的 .NET Framework 项目，完成最小通信验证后再考虑迁移。
 

@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PMAC Geometry Replay · 上下位机绘图复现动画演示</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+    :root {
+      --bg: #0a0f12;
+      --panel: #11191d;
+      --panel-2: #162126;
+      --panel-3: #1b292e;
+      --line: #2a3b40;
+      --text: #edf5f1;
+      --muted: #8fa5a2;
+      --faint: #59706e;
+      --teal: #64e4c6;
+      --teal-deep: #2aa58e;
+      --orange: #ffad5b;
+      --blue: #7cc5ff;
+      --red: #ff7770;
+      --shadow: 0 18px 50px rgba(0,0,0,.26);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+      background-image:
+        linear-gradient(rgba(100,228,198,.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(100,228,198,.045) 1px, transparent 1px),
+        radial-gradient(circle at 85% 0%, rgba(44,114,113,.22), transparent 34rem);
+      background-size: 34px 34px, 34px 34px, auto;
+    }
+
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+
+    .app-shell { width: min(1500px, calc(100% - 36px)); margin: 0 auto; padding: 24px 0 36px; }
+    .topbar { display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-bottom: 48px; }
+    .brand { display: flex; align-items: center; gap: 13px; }
+    .brand-mark { width: 36px; height: 36px; border: 1px solid var(--teal); border-radius: 50%; position: relative; display: grid; place-items: center; }
+    .brand-mark::before, .brand-mark::after { content: ''; position: absolute; background: var(--teal); }
+    .brand-mark::before { width: 18px; height: 1px; }
+    .brand-mark::after { width: 1px; height: 18px; }
+    .brand-name { font-size: 13px; letter-spacing: .13em; font-weight: 700; }
+    .brand-sub { color: var(--muted); font-size: 11px; letter-spacing: .13em; text-transform: uppercase; margin-top: 3px; }
+    .top-meta { display: flex; align-items: center; gap: 16px; color: var(--muted); font: 11px 'Space Mono', monospace; }
+    .live-dot { display: inline-flex; align-items: center; gap: 7px; color: var(--teal); }
+    .live-dot::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 4px rgba(100,228,198,.13); }
+
+    .hero { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, .65fr); gap: 40px; align-items: end; margin-bottom: 38px; }
+    .eyebrow { color: var(--teal); text-transform: uppercase; letter-spacing: .2em; font: 11px 'Space Mono', monospace; margin: 0 0 15px; }
+    h1 { font-size: clamp(36px, 5.2vw, 74px); line-height: .98; letter-spacing: -.055em; max-width: 790px; margin: 0; text-wrap: pretty; }
+    h1 span { color: var(--teal); }
+    .hero-copy { color: var(--muted); line-height: 1.65; font-size: 15px; max-width: 430px; margin: 0 0 2px; }
+
+    .workbench { display: grid; grid-template-columns: minmax(0, 1fr) 110px minmax(0, 1fr); gap: 12px; align-items: stretch; }
+    .panel { background: linear-gradient(145deg, rgba(22,33,38,.96), rgba(13,20,23,.98)); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    .panel-head { display: flex; justify-content: space-between; align-items: flex-start; padding: 18px 19px 14px; border-bottom: 1px solid rgba(42,59,64,.75); }
+    .panel-kicker { color: var(--muted); text-transform: uppercase; letter-spacing: .16em; font: 10px 'Space Mono', monospace; margin-bottom: 6px; }
+    .panel-title { font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
+    .panel-badge { color: var(--teal); border: 1px solid rgba(100,228,198,.3); border-radius: 999px; padding: 5px 9px; font: 10px 'Space Mono', monospace; white-space: nowrap; }
+    .panel-badge.orange { color: var(--orange); border-color: rgba(255,173,91,.3); }
+
+    .stage-wrap { padding: 15px 15px 8px; }
+    .stage { width: 100%; aspect-ratio: 1.32; min-height: 260px; display: block; background: #0a1114; border: 1px solid #24343a; border-radius: 12px; }
+    .stage-grid { stroke: #203036; stroke-width: 1; opacity: .8; }
+    .axis { stroke: #50716f; stroke-width: 1.2; stroke-dasharray: 3 6; opacity: .8; }
+    .axis-label { fill: #68817e; font: 9px 'Space Mono', monospace; }
+    .ghost-path { fill: none; stroke: #435a5f; stroke-width: 2; stroke-dasharray: 4 6; opacity: .7; }
+    .shape-path { fill: none; stroke: var(--teal); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 7px rgba(100,228,198,.35)); }
+    .target-path { fill: none; stroke: var(--orange); stroke-width: 3.8; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 8px rgba(255,173,91,.42)); }
+    .cursor-dot { fill: var(--orange); stroke: #fff5e4; stroke-width: 2; filter: drop-shadow(0 0 7px rgba(255,173,91,.8)); }
+    .sample-dot { fill: #7cc5ff; stroke: #071114; stroke-width: 1.5; opacity: .72; }
+    .sample-dot.active { fill: #fff5e4; stroke: var(--orange); stroke-width: 2; opacity: 1; filter: drop-shadow(0 0 6px rgba(255,173,91,.75)); }
+    .interpolation-segment { fill: none; stroke: #fff5e4; stroke-width: 4.5; stroke-linecap: round; opacity: .95; filter: drop-shadow(0 0 6px rgba(255,245,228,.4)); }
+    .velocity-vector { stroke: var(--blue); stroke-width: 2; stroke-linecap: round; opacity: .9; marker-end: url(#velocityArrow); }
+    .next-point { fill: none; stroke: var(--blue); stroke-width: 1.5; stroke-dasharray: 3 3; }
+    .interpolation-readout { fill: #d9e8e3; font: 9px 'Space Mono', monospace; }
+    .interpolation-readout.accent { fill: var(--orange); }
+    .point-label { fill: #aec6c2; font: 10px 'Space Mono', monospace; }
+    .cad-box { fill: rgba(124,197,255,.08); stroke: rgba(124,197,255,.45); stroke-dasharray: 4 5; }
+    .cad-text { fill: var(--blue); font: 10px 'Space Mono', monospace; }
+
+    .tools { display: flex; gap: 7px; overflow-x: auto; padding: 7px 15px 14px; scrollbar-width: thin; }
+    .tool { flex: 0 0 auto; color: var(--muted); background: transparent; border: 1px solid #2b4044; border-radius: 8px; padding: 9px 11px; font-size: 12px; transition: .2s ease; }
+    .tool:hover { color: var(--text); border-color: #57726f; background: #1a292d; }
+    .tool.active { color: #071311; background: var(--teal); border-color: var(--teal); font-weight: 600; }
+    .tool.cad.active { color: #071311; background: var(--blue); border-color: var(--blue); }
+
+    .telemetry { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; border-top: 1px solid rgba(42,59,64,.75); background: rgba(42,59,64,.55); }
+    .telemetry-cell { background: #10191d; padding: 12px 15px; min-width: 0; }
+    .telemetry-label { color: var(--faint); font: 9px 'Space Mono', monospace; text-transform: uppercase; margin-bottom: 6px; }
+    .telemetry-value { color: var(--text); font: 12px 'Space Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .telemetry-value.teal { color: var(--teal); }
+    .telemetry-value.orange { color: var(--orange); }
+
+    .transport { display: flex; flex-direction: column; justify-content: center; gap: 14px; min-width: 0; }
+    .transport-label { text-align: center; color: var(--muted); text-transform: uppercase; letter-spacing: .16em; font: 9px 'Space Mono', monospace; }
+    .bus-line { height: 1px; background: linear-gradient(90deg, transparent, var(--teal), var(--orange), transparent); position: relative; margin: 0 10px; }
+    .bus-line::before, .bus-line::after { content: ''; position: absolute; top: -4px; width: 9px; height: 9px; border-top: 1px solid var(--teal); border-right: 1px solid var(--teal); transform: rotate(45deg); }
+    .bus-line::before { left: 21%; }
+    .bus-line::after { right: 21%; border-color: var(--orange); transform: rotate(45deg); }
+    .packet-stack { display: flex; flex-direction: column; gap: 6px; }
+    .packet { border: 1px solid #2b4044; background: #10191d; border-radius: 7px; padding: 7px 5px; text-align: center; color: var(--faint); font: 9px 'Space Mono', monospace; transition: .25s; }
+    .packet.on { color: var(--teal); border-color: rgba(100,228,198,.5); background: rgba(100,228,198,.09); box-shadow: 0 0 16px rgba(100,228,198,.1); }
+    .packet.last.on { color: var(--orange); border-color: rgba(255,173,91,.5); background: rgba(255,173,91,.09); }
+    .data-flow { color: var(--faint); text-align: center; font: 9px 'Space Mono', monospace; line-height: 1.7; }
+
+    .control-bar { display: grid; grid-template-columns: auto minmax(180px, 1fr) auto auto; align-items: center; gap: 16px; margin: 14px 0 20px; padding: 12px 14px; background: rgba(17,25,29,.8); border: 1px solid var(--line); border-radius: 13px; }
+    .play-btn { display: inline-flex; align-items: center; gap: 8px; color: #071311; background: var(--teal); border: 0; border-radius: 8px; padding: 10px 14px; font-weight: 700; font-size: 12px; min-height: 42px; }
+    .play-btn:hover { background: #88efd7; }
+    .play-icon { width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 8px solid currentColor; }
+    .play-icon.pause { width: 9px; height: 12px; border: 0; border-left: 3px solid currentColor; border-right: 3px solid currentColor; }
+    .progress-track { height: 5px; background: #26363a; border-radius: 99px; overflow: hidden; }
+    .progress-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--teal), var(--orange)); border-radius: inherit; transition: width .1s linear; }
+    .progress-meta { display: flex; justify-content: space-between; color: var(--muted); font: 10px 'Space Mono', monospace; margin-top: 7px; }
+    .speed { display: flex; align-items: center; gap: 8px; color: var(--muted); font: 10px 'Space Mono', monospace; }
+    .speed input { accent-color: var(--teal); width: 76px; }
+    .reset-btn { color: var(--muted); background: transparent; border: 1px solid #2c4145; border-radius: 8px; padding: 9px 12px; font-size: 11px; }
+    .reset-btn:hover { color: var(--text); border-color: #607b77; }
+
+    .interp-panel { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(300px, .65fr); gap: 18px; padding: 18px 20px; margin-bottom: 12px; }
+    .interp-copy { display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
+    .interp-equation { color: var(--teal); font: 15px 'Space Mono', monospace; letter-spacing: -.03em; margin: 0 0 10px; }
+    .interp-caption { color: var(--muted); font-size: 12px; line-height: 1.55; max-width: 650px; margin: 0; }
+    .interp-legend { display: flex; flex-wrap: wrap; gap: 12px 18px; color: var(--muted); font: 10px 'Space Mono', monospace; margin-top: 17px; }
+    .legend-item { display: inline-flex; align-items: center; gap: 7px; }
+    .legend-mark { width: 20px; height: 0; border-top: 3px solid var(--orange); }
+    .legend-mark.samples { width: 7px; height: 7px; border: 0; border-radius: 50%; background: var(--blue); }
+    .legend-mark.segment { border-color: #fff5e4; }
+    .legend-mark.vector { border-color: var(--blue); }
+    .interp-metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1px; align-self: stretch; background: rgba(42,59,64,.7); border: 1px solid rgba(42,59,64,.7); border-radius: 10px; overflow: hidden; }
+    .interp-metric { padding: 13px 12px; background: #0d171b; min-width: 0; }
+    .interp-metric-label { color: var(--faint); font: 9px 'Space Mono', monospace; text-transform: uppercase; margin-bottom: 8px; }
+    .interp-metric-value { color: var(--text); font: 13px 'Space Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .interp-metric-value.teal { color: var(--teal); }
+    .interp-metric-value.orange { color: var(--orange); }
+    .interp-metric-value.blue { color: var(--blue); }
+
+    .bottom-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr); gap: 12px; }
+    .explain, .inspector { padding: 20px; }
+    .section-title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+    .section-title h2 { margin: 0; font-size: 16px; letter-spacing: -.02em; }
+    .section-title span { color: var(--faint); font: 10px 'Space Mono', monospace; }
+    .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+    .step { border: 1px solid #263a3e; background: rgba(8,15,17,.5); border-radius: 11px; padding: 14px; min-height: 130px; transition: .25s; }
+    .step.active { border-color: rgba(100,228,198,.6); background: rgba(100,228,198,.07); transform: translateY(-3px); }
+    .step-no { color: var(--teal); font: 10px 'Space Mono', monospace; margin-bottom: 25px; }
+    .step h3 { margin: 0 0 7px; font-size: 13px; }
+    .step p { margin: 0; color: var(--muted); line-height: 1.45; font-size: 11px; }
+    .inspector { min-width: 0; }
+    .frame { background: #0a1114; border: 1px solid #263a3e; border-radius: 10px; overflow: hidden; }
+    .frame-head, .frame-row { display: grid; grid-template-columns: 1.1fr 1fr 1.2fr; gap: 10px; padding: 10px 12px; align-items: center; }
+    .frame-head { color: var(--faint); border-bottom: 1px solid #263a3e; font: 9px 'Space Mono', monospace; text-transform: uppercase; }
+    .frame-row { color: var(--muted); font: 10px 'Space Mono', monospace; border-bottom: 1px solid rgba(38,58,62,.6); }
+    .frame-row:last-child { border-bottom: 0; }
+    .frame-row span:first-child { color: var(--teal); }
+    .frame-row .status { color: var(--orange); }
+    .frame-note { color: var(--faint); font: 10px 'Space Mono', monospace; line-height: 1.6; margin-top: 12px; }
+
+    @media (max-width: 1020px) {
+      .hero { grid-template-columns: 1fr; gap: 18px; }
+      .hero-copy { max-width: 620px; }
+      .workbench { grid-template-columns: 1fr; }
+      .transport { flex-direction: row; align-items: center; padding: 3px 10px; }
+      .transport-label { text-align: left; white-space: nowrap; }
+      .bus-line { flex: 1; }
+      .packet-stack { flex-direction: row; }
+      .data-flow { white-space: nowrap; }
+    }
+
+    @media (max-width: 700px) {
+      .app-shell { width: min(100% - 24px, 600px); padding-top: 16px; }
+      .topbar { margin-bottom: 34px; }
+      .top-meta { display: none; }
+      .hero { margin-bottom: 28px; }
+      .control-bar { grid-template-columns: 1fr 1fr; gap: 11px; }
+      .control-bar .progress-wrap { grid-column: 1 / -1; grid-row: 2; }
+      .speed { justify-content: flex-end; }
+      .bottom-grid { grid-template-columns: 1fr; }
+      .steps { grid-template-columns: 1fr 1fr; }
+      .step { min-height: 118px; }
+      .stage { min-height: 230px; }
+      .interp-panel { grid-template-columns: 1fr; }
+      .interp-metrics { min-height: 92px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <div><div class="brand-name">PMAC / GEOMETRY REPLAY</div><div class="brand-sub">上位机 · 通讯链路 · 下位机</div></div>
+      </div>
+      <div class="top-meta"><span class="live-dot">SIMULATION ONLINE</span><span>G-CODE / DXF BRIDGE</span><span>v1.4.2</span></div>
+    </header>
+
+    <section class="hero">
+      <div><p class="eyebrow">Motion explainer / 01</p><h1>把几何意图，变成<br><span>可复现的机床运动。</span></h1></div>
+      <p class="hero-copy">选择一个图元，观察上位机如何把绘制动作转换为坐标指令，再经过通讯帧、下位机解析与插补，复现出同一条轨迹。</p>
+    </section>
+
+    <main>
+      <section class="workbench" aria-label="上下位机绘图复现工作台">
+        <article class="panel">
+          <div class="panel-head"><div><div class="panel-kicker">01 / source</div><div class="panel-title">上位机 · 图形输入</div></div><div id="sourceBadge" class="panel-badge">VECTOR</div></div>
+          <div class="stage-wrap">
+            <svg id="sourceStage" class="stage" viewBox="0 0 380 270" role="img" aria-label="上位机图形输入画布">
+              <g class="grid-lines"></g><line class="axis" x1="32" y1="222" x2="347" y2="222"></line><line class="axis" x1="48" y1="238" x2="48" y2="26"></line><text class="axis-label" x="335" y="239">X +</text><text class="axis-label" x="28" y="35">Y +</text>
+              <path id="sourceGhost" class="ghost-path"></path><path id="sourcePath" class="shape-path"></path><g id="sourcePoints"></g><g id="cadOverlay"></g>
+            </svg>
+          </div>
+          <div id="toolbar" class="tools" role="tablist" aria-label="选择图元"><button class="tool active" data-shape="line" role="tab">直线</button><button class="tool" data-shape="arc" role="tab">圆弧</button><button class="tool" data-shape="star" role="tab">星形</button><button class="tool" data-shape="free" role="tab">自由曲线</button><button class="tool cad" data-shape="cad" role="tab">AutoCAD 导入</button></div>
+          <div class="telemetry"><div class="telemetry-cell"><div class="telemetry-label">Input type</div><div id="inputType" class="telemetry-value teal">G01 · LINE</div></div><div class="telemetry-cell"><div class="telemetry-label">Geometry</div><div id="geometryInfo" class="telemetry-value">2 points / 1 segment</div></div></div>
+        </article>
+
+        <aside class="transport" aria-label="通讯链路">
+          <div class="transport-label">serial bus</div><div class="bus-line"></div>
+          <div class="packet-stack"><div class="packet on" data-packet="capture">CAP</div><div class="packet" data-packet="encode">ENC</div><div class="packet" data-packet="send">TX</div><div class="packet" data-packet="decode">RX</div><div class="packet last" data-packet="replay">RUN</div></div>
+          <div class="data-flow">X/Y/Z<br>+ feed<br>+ mode</div>
+        </aside>
+
+        <article class="panel">
+          <div class="panel-head"><div><div class="panel-kicker">02 / target</div><div class="panel-title">下位机 · 轨迹复现</div></div><div id="targetBadge" class="panel-badge orange">READY</div></div>
+          <div class="stage-wrap">
+            <svg id="targetStage" class="stage" viewBox="0 0 380 270" role="img" aria-label="下位机轨迹复现画布">
+              <defs><marker id="velocityArrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#7cc5ff"></path></marker></defs>
+              <g class="grid-lines"></g><line class="axis" x1="32" y1="222" x2="347" y2="222"></line><line class="axis" x1="48" y1="238" x2="48" y2="26"></line><text class="axis-label" x="335" y="239">X +</text><text class="axis-label" x="28" y="35">Y +</text>
+              <path id="targetGhost" class="ghost-path"></path><g id="targetPaths"></g><g id="sampleLayer"></g><path id="interpolationSegment" class="interpolation-segment"></path><line id="velocityVector" class="velocity-vector" x1="48" y1="222" x2="48" y2="222"></line><circle id="nextPoint" class="next-point" cx="48" cy="222" r="5"></circle><circle id="cursorDot" class="cursor-dot" cx="48" cy="222" r="5"></circle><g id="targetPoints"></g><text id="interpolationReadout" class="interpolation-readout" x="58" y="52">NEXT POINT · WAITING</text>
+            </svg>
+          </div>
+          <div class="telemetry"><div class="telemetry-cell"><div class="telemetry-label">Controller state</div><div id="controllerState" class="telemetry-value orange">IDLE · WAITING</div></div><div class="telemetry-cell"><div class="telemetry-label">Position</div><div id="positionInfo" class="telemetry-value">X 000.0 · Y 000.0</div></div></div>
+        </article>
+      </section>
+
+      <section class="control-bar" aria-label="播放控制">
+        <button id="playBtn" class="play-btn"><span class="play-icon"></span><span>播放复现</span></button>
+        <div class="progress-wrap"><div class="progress-track"><div id="progressFill" class="progress-fill"></div></div><div class="progress-meta"><span id="phaseLabel">待机 · 选择图元后开始</span><span id="progressLabel">0%</span></div></div>
+        <label class="speed"><span>速度</span><input id="speedInput" type="range" min="0.5" max="2" step="0.25" value="1" /><span id="speedValue">1.0×</span></label>
+        <button id="resetBtn" class="reset-btn">重置</button>
+      </section>
+
+      <section class="interp-panel panel" aria-label="插补过程">
+        <div class="interp-copy">
+          <div><div class="section-title"><h2>插补器实时剖面</h2><span>POSITION LOOP / 4 ms</span></div><p class="interp-equation">P<sub>k+1</sub> = P<sub>k</sub> + v · Δt · û</p><p class="interp-caption">下位机不直接“画完”整条几何，而是按采样周期计算下一目标点。白色微段是本周期的运动量，蓝色箭头是当前速度方向，浅蓝色点阵是已经离散出的采样点。</p></div>
+          <div class="interp-legend"><span class="legend-item"><i class="legend-mark"></i>目标轮廓</span><span class="legend-item"><i class="legend-mark samples"></i>采样点</span><span class="legend-item"><i class="legend-mark segment"></i>当前微段</span><span class="legend-item"><i class="legend-mark vector"></i>速度向量</span></div>
+        </div>
+        <div class="interp-metrics"><div class="interp-metric"><div class="interp-metric-label">Sample</div><div id="sampleMetric" class="interp-metric-value teal">000 / 000</div></div><div class="interp-metric"><div class="interp-metric-label">Step Δ</div><div id="stepMetric" class="interp-metric-value blue">ΔX 0.0 · ΔY 0.0</div></div><div class="interp-metric"><div class="interp-metric-label">Tracking error</div><div id="errorMetric" class="interp-metric-value orange">0.00 px</div></div></div>
+      </section>
+
+      <section class="bottom-grid">
+        <article class="panel explain"><div class="section-title"><h2>一条轨迹的四次变换</h2><span>OBSERVABILITY / 4 STEPS</span></div><div class="steps"><div class="step active" data-step="capture"><div class="step-no">STEP 01</div><h3>采集几何</h3><p>鼠标、绘图工具或 DXF 文件生成点、半径与控制点。</p></div><div class="step" data-step="encode"><div class="step-no">STEP 02</div><h3>编码指令</h3><p>转为 G01 / G02 / G03 与坐标、速度等参数。</p></div><div class="step" data-step="send"><div class="step-no">STEP 03</div><h3>通讯传输</h3><p>指令被拆成数据帧，经过链路抵达控制器缓冲区。</p></div><div class="step" data-step="replay"><div class="step-no">STEP 04</div><h3>插补复现</h3><p>下位机解码后连续插补，让执行端走出原始轮廓。</p></div></div></article>
+        <article class="panel inspector"><div class="section-title"><h2>当前指令帧</h2><span id="frameCount">FRAME 000</span></div><div class="frame"><div class="frame-head"><span>FIELD</span><span>VALUE</span><span>STATE</span></div><div class="frame-row"><span>TYPE</span><span id="frameType">G01</span><span class="status">VALID</span></div><div class="frame-row"><span>POINTS</span><span id="framePoints">P0 → P1</span><span class="status">QUEUED</span></div><div class="frame-row"><span>FEED</span><span id="frameFeed">F1200</span><span class="status">SYNC</span></div><div class="frame-row"><span>CRC16</span><span id="frameCrc">0x7A3C</span><span class="status">OK</span></div></div><div id="frameNote" class="frame-note">图元还没有发送。点击“播放复现”开始观察每一帧如何推进。</div></article>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const NS = 'http://www.w3.org/2000/svg';
+    const stageW = 380, stageH = 270;
+    const shapes = {
+      line: { label: 'G01 · LINE', badge: 'VECTOR', info: '2 points / 1 segment', frame: 'G01', points: 'P0 → P1', feed: 'F1200', crc: '0x7A3C', paths: ['M 70 188 L 307 66'], points: [[70,188,'P0'],[307,66,'P1']], note: '直线以起点与终点编码，控制器执行一次线性插补。' },
+      arc: { label: 'G03 · ARC', badge: 'VECTOR', info: '3 points / 1 arc', frame: 'G03', points: 'P0 → P1 · R', feed: 'F860', crc: '0xA1D8', paths: ['M 68 184 A 128 128 0 0 1 312 184'], points: [[68,184,'P0'],[312,184,'P1']], note: '圆弧保留端点、方向与半径，控制器按 G03 逆时针插补。' },
+      star: { label: 'POLY · STAR', badge: 'VECTOR', info: '10 vertices / 5 edges', frame: 'POLY', points: 'P0 → P9 · CLOSE', feed: 'F980', crc: '0xD02F', paths: ['M 190 38 L 224 132 L 323 132 L 243 190 L 274 248 L 190 213 L 106 248 L 137 190 L 57 132 L 156 132 Z'], points: [[190,38,'P0'],[224,132,'P1'],[323,132,'P2']], note: '星形作为闭合多段线发送，顶点顺序决定下位机的连续走刀方向。' },
+      free: { label: 'SPLINE · FREE', badge: 'VECTOR', info: '6 control points / spline', frame: 'SPL', points: 'P0 → P5 · SPLINE', feed: 'F540', crc: '0x4EC1', paths: ['M 54 176 C 91 52 122 232 164 126 S 244 38 324 169'], points: [[54,176,'P0'],[116,117,'C1'],[164,126,'C2'],[230,89,'C3'],[324,169,'P5']], note: '自由曲线用控制点描述形状，发送后由下位机离散成连续微段。' },
+      cad: { label: 'DXF · IMPORT', badge: 'AUTOCAD', info: '4 lines + 1 circle', frame: 'DXF', points: 'L1 → L4 · C1', feed: 'F1500', crc: '0x91B6', paths: ['M 65 187 L 65 76 L 145 76 L 145 116 L 223 116 L 223 66 L 315 66 L 315 187 Z', 'M 245 156 A 30 30 0 1 1 244.9 156'], points: [[65,187,'L1'],[65,76,'L2'],[145,76,'L3'],[315,187,'L4']], note: 'AutoCAD 的 DXF 实体被拆成线段与圆，再按实体顺序送入控制器。' }
+    };
+
+    let current = 'line', progress = 0, playing = false, raf = null, lastTime = 0, speed = 1;
+    const qs = (s) => document.querySelector(s);
+    const qsa = (s) => [...document.querySelectorAll(s)];
+    const sourcePath = qs('#sourcePath'), sourceGhost = qs('#sourceGhost'), targetGhost = qs('#targetGhost'), targetPaths = qs('#targetPaths');
+    const sampleLayer = qs('#sampleLayer'), interpolationSegment = qs('#interpolationSegment'), velocityVector = qs('#velocityVector'), nextPoint = qs('#nextPoint'), cursorDot = qs('#cursorDot'), interpolationReadout = qs('#interpolationReadout');
+    let samplePositions = [], totalPathLength = 0, sampleCount = 48;
+
+    function makeGrid(svg) {
+      const group = svg.querySelector('.grid-lines');
+      for (let x = 48; x <= 332; x += 28) { const line = document.createElementNS(NS, 'line'); line.setAttribute('x1', x); line.setAttribute('x2', x); line.setAttribute('y1', 28); line.setAttribute('y2', 222); line.setAttribute('class', 'stage-grid'); group.appendChild(line); }
+      for (let y = 34; y <= 222; y += 28) { const line = document.createElementNS(NS, 'line'); line.setAttribute('x1', 48); line.setAttribute('x2', 332); line.setAttribute('y1', y); line.setAttribute('y2', y); line.setAttribute('class', 'stage-grid'); group.appendChild(line); }
+    }
+    makeGrid(qs('#sourceStage')); makeGrid(qs('#targetStage'));
+
+    function pathLength(el) { try { return el.getTotalLength(); } catch { return 1000; } }
+    function addPointLabels(group, pts, muted = false) { group.replaceChildren(); pts.forEach(([x,y,label], i) => { const g = document.createElementNS(NS, 'g'); const c = document.createElementNS(NS, 'circle'); c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', i === 0 ? 4 : 3); c.setAttribute('fill', muted ? '#50686a' : '#64e4c6'); c.setAttribute('opacity', muted ? '.65' : '.95'); const t = document.createElementNS(NS, 'text'); t.setAttribute('x', x + 7); t.setAttribute('y', y - 7); t.setAttribute('class', 'point-label'); t.textContent = label; g.append(c,t); group.appendChild(g); }); }
+
+    function setPaths(container, dList, cls) { container.replaceChildren(); return dList.map(d => { const p = document.createElementNS(NS, 'path'); p.setAttribute('d', d); p.setAttribute('class', cls); container.appendChild(p); return p; }); }
+
+    function pointAtGlobalDistance(paths, lengths, distance) {
+      let remaining = Math.max(0, Math.min(totalPathLength, distance));
+      for (let i = 0; i < paths.length; i++) {
+        if (remaining <= lengths[i] || i === paths.length - 1) return { point: paths[i].getPointAtLength(Math.min(lengths[i], remaining)), pathIndex: i, pathDistance: Math.min(lengths[i], remaining) };
+        remaining -= lengths[i];
+      }
+      return { point: paths[paths.length - 1].getPointAtLength(lengths[lengths.length - 1]), pathIndex: paths.length - 1, pathDistance: lengths[lengths.length - 1] };
+    }
+
+    function renderSamples(paths) {
+      sampleLayer.replaceChildren(); samplePositions = [];
+      const lengths = paths.map(pathLength); totalPathLength = lengths.reduce((sum, len) => sum + len, 0);
+      for (let i = 0; i <= sampleCount; i++) {
+        const sample = pointAtGlobalDistance(paths, lengths, totalPathLength * i / sampleCount);
+        samplePositions.push(sample);
+        const dot = document.createElementNS(NS, 'circle'); dot.setAttribute('cx', sample.point.x); dot.setAttribute('cy', sample.point.y); dot.setAttribute('r', i === 0 || i === sampleCount ? 3.2 : 2.25); dot.setAttribute('class', 'sample-dot'); dot.dataset.sample = i; sampleLayer.appendChild(dot);
+      }
+    }
+
+    function renderShape() {
+      const s = shapes[current];
+      sourcePath.setAttribute('d', s.paths[0]);
+      sourceGhost.setAttribute('d', s.paths[0]);
+      targetGhost.setAttribute('d', s.paths[0]);
+      const targets = setPaths(targetPaths, s.paths, 'target-path');
+      targets.forEach(p => { p.style.strokeDasharray = pathLength(p); p.style.strokeDashoffset = pathLength(p); });
+      renderSamples(targets);
+      const sourcePointGroup = qs('#sourcePoints'); addPointLabels(sourcePointGroup, s.points || [], false);
+      const targetPointGroup = qs('#targetPoints'); addPointLabels(targetPointGroup, s.points || [], true);
+      qs('#inputType').textContent = s.label; qs('#sourceBadge').textContent = s.badge; qs('#geometryInfo').textContent = s.info;
+      qs('#frameType').textContent = s.frame; qs('#framePoints').textContent = s.points; qs('#frameFeed').textContent = s.feed; qs('#frameCrc').textContent = s.crc;
+      qs('#frameNote').textContent = s.note;
+      qs('#targetBadge').textContent = 'READY'; qs('#controllerState').textContent = 'IDLE · WAITING'; qs('#positionInfo').textContent = 'X 000.0 · Y 000.0';
+      interpolationSegment.setAttribute('d', 'M 48 222 L 48 222'); velocityVector.setAttribute('x1', 48); velocityVector.setAttribute('y1', 222); velocityVector.setAttribute('x2', 48); velocityVector.setAttribute('y2', 222); nextPoint.setAttribute('cx', 48); nextPoint.setAttribute('cy', 222); interpolationReadout.textContent = 'NEXT POINT · WAITING';
+      qs('#cadOverlay').replaceChildren();
+      if (current === 'cad') { const box = document.createElementNS(NS, 'rect'); box.setAttribute('x', 54); box.setAttribute('y', 55); box.setAttribute('width', 272); box.setAttribute('height', 142); box.setAttribute('rx', 7); box.setAttribute('class', 'cad-box'); const t = document.createElementNS(NS, 'text'); t.setAttribute('x', 63); t.setAttribute('y', 70); t.setAttribute('class', 'cad-text'); t.textContent = 'DXF ENTITIES / 05'; qs('#cadOverlay').append(box, t); }
+      progress = 0; updateProgress();
+    }
+
+    function updateProgress() {
+      const targets = [...targetPaths.querySelectorAll('path')];
+      const local = Math.max(0, Math.min(1, progress / 100));
+      if (targets.length) {
+        const each = 1 / targets.length;
+        targets.forEach((p, i) => { const p0 = Math.max(0, Math.min(1, (local - i * each) / each)); p.style.strokeDashoffset = pathLength(p) * (1 - p0); });
+        const sampleFloat = local * sampleCount; const sampleIndex = Math.min(sampleCount - 1, Math.floor(sampleFloat)); const cycleT = sampleFloat - sampleIndex; const a = samplePositions[sampleIndex] || samplePositions[0]; const b = samplePositions[Math.min(sampleCount, sampleIndex + 1)] || a; const target = pointAtGlobalDistance(targets, targets.map(pathLength), totalPathLength * local).point;
+        const actual = { x: a.point.x + (b.point.x - a.point.x) * cycleT, y: a.point.y + (b.point.y - a.point.y) * cycleT };
+        const stepX = b.point.x - actual.x, stepY = b.point.y - actual.y; const stepLen = Math.hypot(stepX, stepY); const vectorScale = stepLen > .2 ? Math.min(28, Math.max(11, stepLen * 2.2)) : 0; const unitX = stepLen ? stepX / stepLen : 0, unitY = stepLen ? stepY / stepLen : 0;
+        cursorDot.setAttribute('cx', actual.x); cursorDot.setAttribute('cy', actual.y); nextPoint.setAttribute('cx', b.point.x); nextPoint.setAttribute('cy', b.point.y); interpolationSegment.setAttribute('d', `M ${actual.x} ${actual.y} L ${b.point.x} ${b.point.y}`); velocityVector.setAttribute('x1', actual.x); velocityVector.setAttribute('y1', actual.y); velocityVector.setAttribute('x2', actual.x + unitX * vectorScale); velocityVector.setAttribute('y2', actual.y + unitY * vectorScale); interpolationReadout.setAttribute('x', Math.min(276, actual.x + 10)); interpolationReadout.setAttribute('y', Math.max(20, actual.y - 13)); interpolationReadout.textContent = progress >= 100 ? 'INTERPOLATION · DONE' : `P${String(sampleIndex).padStart(2,'0')} → P${String(sampleIndex + 1).padStart(2,'0')}`;
+        qsa('.sample-dot').forEach(dot => dot.classList.toggle('active', Number(dot.dataset.sample) === sampleIndex));
+        const trackingError = Math.hypot(actual.x - target.x, actual.y - target.y); qs('#sampleMetric').textContent = String(sampleIndex).padStart(3,'0') + ' / ' + String(sampleCount).padStart(3,'0'); qs('#stepMetric').textContent = 'ΔX ' + stepX.toFixed(1) + ' · ΔY ' + stepY.toFixed(1); qs('#errorMetric').textContent = trackingError.toFixed(2) + ' px';
+        qs('#positionInfo').textContent = 'X ' + actual.x.toFixed(1).padStart(5,'0') + ' · Y ' + actual.y.toFixed(1).padStart(5,'0');
+      }
+      qs('#progressFill').style.width = progress + '%'; qs('#progressLabel').textContent = Math.round(progress) + '%';
+      const phase = progress < 8 ? '采集 · capture' : progress < 28 ? '编码 · encode' : progress < 52 ? '发送 · transmit' : progress < 74 ? '接收 · decode' : progress < 100 ? '插补 · replay' : '完成 · synchronized';
+      qs('#phaseLabel').textContent = phase;
+      const state = progress >= 100 ? 'COMPLETE · SYNCED' : progress > 74 ? 'RUNNING · INTERPOLATING' : progress > 48 ? 'RX · BUFFERING' : progress > 22 ? 'TX · SENDING' : 'IDLE · WAITING';
+      qs('#controllerState').textContent = state;
+      const f = shapes[current].frame; qs('#frameCount').textContent = 'FRAME ' + String(Math.floor(progress * 3.2)).padStart(3,'0');
+      const stepName = progress < 28 ? 'capture' : progress < 52 ? 'encode' : progress < 74 ? 'send' : 'replay';
+      qsa('.packet').forEach(el => el.classList.toggle('on', ['capture','encode','send','decode','replay'].indexOf(el.dataset.packet) <= ['capture','encode','send','decode','replay'].indexOf(stepName)));
+      qsa('.step').forEach(el => el.classList.toggle('active', el.dataset.step === stepName));
+      if (progress >= 100) { qs('#targetBadge').textContent = 'SYNCED'; }
+    }
+
+    function animate(ts) { if (!playing) return; if (!lastTime) lastTime = ts; const dt = ts - lastTime; lastTime = ts; progress = Math.min(100, progress + dt * .045 * speed); updateProgress(); if (progress < 100) raf = requestAnimationFrame(animate); else { playing = false; qs('#playBtn').innerHTML = '<span class="play-icon"></span><span>重新播放</span>'; } }
+    function togglePlay() { if (playing) { playing = false; cancelAnimationFrame(raf); qs('#playBtn').innerHTML = '<span class="play-icon"></span><span>继续播放</span>'; return; } if (progress >= 100) progress = 0; playing = true; lastTime = 0; qs('#playBtn').innerHTML = '<span class="play-icon pause"></span><span>暂停复现</span>'; raf = requestAnimationFrame(animate); }
+    function reset() { playing = false; cancelAnimationFrame(raf); progress = 0; qs('#playBtn').innerHTML = '<span class="play-icon"></span><span>播放复现</span>'; renderShape(); }
+
+    qsa('.tool').forEach(btn => btn.addEventListener('click', () => { qsa('.tool').forEach(b => b.classList.remove('active')); btn.classList.add('active'); current = btn.dataset.shape; reset(); }));
+    qs('#playBtn').addEventListener('click', togglePlay); qs('#resetBtn').addEventListener('click', reset);
+    qs('#speedInput').addEventListener('input', e => { speed = Number(e.target.value); qs('#speedValue').textContent = speed.toFixed(1) + '×'; });
+    renderShape();
+  </script>
+</body>
+</html>

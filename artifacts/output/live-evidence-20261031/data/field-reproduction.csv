@@ -1,0 +1,2 @@
+﻿status,cad_filename,cad_sha256,autocad_export_version,target_size_mm,strokes,points,mode,spacing_mm,speed_mm_s,start_x_mm,start_y_mm,end_x_mm,end_y_mm,measured_endpoint_x_mm,measured_endpoint_y_mm,contour_rms_mm,contour_max_mm,instrument,date,operator,photo_video,run_export_folder
+TODO,,,,,,,,,,,,,,,,,,,,,,

@@ -1,0 +1,10 @@
+{
+  "Files/DxfReader.cs": "12d46c9e253a5c44e17241328429dd3541388f142fa3a3352a4ab8e1b65ffee8",
+  "Controls/CanvasProjection.cs": "3c2aa9b94583fec3c18c9fa69ed9a690421a779624a7b400585fb56e77c6c3f6",
+  "Controls/MotionCanvas.cs": "d7ae0929d5b2ddc701c246c8b7a12aba6d8c72aa65a58732bfb18bbd8e221472",
+  "Motion/PathGeometry.cs": "657dd927d2e1d6864a2b089d4df97d6fb129288366abd7278d367412e979d2ac",
+  "Views/PathView.cs": "9ac044b4e09136e5946b50704c34ce9569ce29ba08bd0c16cbb83ee07d4ebab6",
+  "Models/PathModels.cs": "5b31f77b70983ef0aef57063a537fe49160d9faa4805b930b222f1dae12f06c3",
+  "Models/CanvasModels.cs": "0885cea0d72b51e4a8fd01c239971212bf2183d412dc56e5458b631d9bf9f05d",
+  "tested_assembly": "7f6f5ccb3559ea211d4276e975cff9e3c75770cf423f2f7c707c1768b48ddcda"
+}

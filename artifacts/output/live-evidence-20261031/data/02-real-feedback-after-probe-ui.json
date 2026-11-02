@@ -1,0 +1,19 @@
+{
+  "captured_at_utc": "2026-10-31T05:41:46.588Z",
+  "window": {
+    "app": "process:D:\\pmac资料\\src\\Operations Control\\bin\\Debug\\Operations Control.exe",
+    "id": 11142810,
+    "title": "PMAC 上位机控制程序"
+  },
+  "accessibility": null,
+  "screenshots": [
+    {
+      "height": 1278,
+      "id": "screenshot-0",
+      "originX": 394,
+      "originY": 120,
+      "width": 1772,
+      "zIndex": 0
+    }
+  ]
+}
