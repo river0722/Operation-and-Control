@@ -17,10 +17,14 @@ namespace Operations_Control.Views
         private readonly Timer historyRangeTimer = new Timer { Interval = 200 };
         private readonly ToolTip analysisTip = new ToolTip { AutoPopDelay = 20000 };
         private GroupBox analysisPanel;
+        private TableLayoutPanel analysisShell;
+        private Control analysisBody;
+        private Button analysisToggle;
         private TableLayoutPanel axisLayout;
         private Panel axisViewport;
         private DiagnosticErrorResult historyAnalysis;
         private bool analysisRunning, analysisPending;
+        private bool analysisExpanded = true;
         private int analysisVersion;
 
         private static Label MetricValue()
@@ -55,7 +59,15 @@ namespace Operations_Control.Views
             formula.LinkClicked += delegate { MessageBox.Show(this, DiagnosticErrorAnalysis.ScoreFormula + "\r\n\r\nT 为评分容差（ct），超差比例取 0～1。\r\n权重：RMS 40%、P95 25%、最大绝对误差 15%、超差比例 20%。\r\n这是相对比较分数，不是行业标准或设备合格判定。", "综合误差评分", MessageBoxButtons.OK, MessageBoxIcon.Information); };
             score.Controls.Add(formula, 0, 2); analysisTip.SetToolTip(errorScoreValue, DiagnosticErrorAnalysis.ScoreFormula);
             content.Controls.Add(metrics, 0, 0); content.Controls.Add(score, 1, 0);
-            layout.Controls.Add(settings, 0, 0); layout.Controls.Add(content, 0, 1); layout.Controls.Add(analysisMethod, 0, 2); analysisPanel.Controls.Add(layout);
+            layout.Controls.Add(settings, 0, 0); layout.Controls.Add(content, 0, 1); layout.Controls.Add(analysisMethod, 0, 2);
+            analysisBody = layout;
+            analysisShell = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Padding = new Padding(0) };
+            analysisShell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            analysisShell.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); analysisShell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            analysisToggle = Button("折叠"); analysisToggle.Dock = DockStyle.Right; analysisToggle.Width = 76;
+            analysisToggle.AccessibleName = "折叠偏差分析";
+            analysisToggle.Click += delegate { SetAnalysisExpanded(!analysisExpanded); };
+            analysisShell.Controls.Add(analysisToggle, 0, 0); analysisShell.Controls.Add(layout, 0, 1); analysisPanel.Controls.Add(analysisShell);
             analysisTolerance.ValueChanged += delegate { if (reviewing && !loadingHistory) RequestHistoryAnalysis(); };
             reviewStart.ValueChanged += delegate { SyncHistoryRangeSelector(); ScheduleHistoryRange(reviewStart, EventArgs.Empty); };
             reviewEnd.ValueChanged += delegate { SyncHistoryRangeSelector(); ScheduleHistoryRange(reviewEnd, EventArgs.Empty); };
@@ -70,8 +82,24 @@ namespace Operations_Control.Views
         }
         private void SetAnalysisVisible(bool visible)
         {
-            analysisPanel.Visible = visible; axisLayout.RowStyles[2].Height = visible ? 260 : 0;
-            axisLayout.Height = Math.Max(visible ? 1150 : 890, axisViewport.ClientSize.Height);
+            analysisPanel.Visible = visible;
+            SetAnalysisExpanded(analysisExpanded);
+        }
+        private void SetAnalysisExpanded(bool expanded)
+        {
+            analysisExpanded = expanded;
+            if (analysisToggle != null) { analysisToggle.Text = expanded ? "折叠" : "展开"; analysisToggle.AccessibleName = expanded ? "折叠偏差分析" : "展开偏差分析"; }
+            if (analysisBody != null) analysisBody.Visible = expanded;
+            if (analysisShell != null)
+            {
+                analysisShell.RowStyles[1].SizeType = expanded ? SizeType.Percent : SizeType.Absolute;
+                analysisShell.RowStyles[1].Height = expanded ? 100 : 0;
+            }
+            if (axisLayout != null)
+            {
+                axisLayout.RowStyles[2].Height = analysisPanel != null && analysisPanel.Visible ? expanded ? 260 : 42 : 0;
+                axisLayout.Height = Math.Max(reviewing ? (expanded ? 1160 : 942) : 900, axisViewport.ClientSize.Height);
+            }
         }
         private void InvalidateHistoryAnalysis(string reason)
         {

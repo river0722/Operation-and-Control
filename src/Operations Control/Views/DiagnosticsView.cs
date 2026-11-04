@@ -33,9 +33,9 @@ namespace Operations_Control.Views
             tabs.TabPages.AddRange(new TabPage[] { axis, alarms, config }); Controls.Add(tabs);
             axisViewport = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
             axisLayout = new TableLayoutPanel { Dock = DockStyle.Top, Height = 850, ColumnCount = 1, RowCount = 7 };
-            axisViewport.SizeChanged += delegate { axisLayout.Height = Math.Max(reviewing ? 1150 : 890, axisViewport.ClientSize.Height); };
+            axisViewport.SizeChanged += delegate { axisLayout.Height = Math.Max(reviewing ? 1160 : 900, axisViewport.ClientSize.Height); };
             axisLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 100));
-            axisLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));
+            axisLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 160));
             axisLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
             axisLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
             axisLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 35)); axisLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 35)); axisLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 30));

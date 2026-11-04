@@ -646,6 +646,13 @@ internal static class MotorDebugTests
                 { Color color = narrow.GetPixel(x, y); if (color.ToArgb() == Color.SteelBlue.ToArgb() || color.ToArgb() == Color.DarkOrange.ToArgb()) curvePixels++; }
             }
             Check(curvePixels > 100, "A narrow window between CSV timestamps draws clipped curves consistent with interpolated statistics");
+            Button analysisToggle = Field<Button>(view, "analysisToggle");
+            int expandedPlotTop = Field<Control>(view, "positionTrend").Top;
+            Check(analysisToggle.Text == "折叠", "偏差分析默认展开并提供折叠入口");
+            analysisToggle.PerformClick(); Pump(40);
+            Check(analysisToggle.Text == "展开" && !Field<Control>(view, "analysisBody").Visible && Field<Control>(view, "positionTrend").Top < expandedPlotTop, "折叠偏差分析会隐藏内容并释放曲线空间");
+            analysisToggle.PerformClick(); Pump(40);
+            Check(analysisToggle.Text == "折叠" && Field<Control>(view, "analysisBody").Visible, "再次点击展开偏差分析内容");
             form.ClientSize = new Size(900, 680); Pump(40); Snapshot(form, Path.Combine(directory, "diagnostics-analysis-compact.png"));
             view.ReturnToLive();
             Check(!Field<GroupBox>(view, "analysisPanel").Visible && Field<DiagnosticErrorResult>(view, "historyAnalysis") == null, "Returning live hides CSV-only analysis and clears results");

@@ -33,7 +33,7 @@ namespace Operations_Control.Views
             TableLayoutPanel controls = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };
             controls.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             controls.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); controls.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-            controls.RowStyles.Add(new RowStyle(SizeType.Absolute, 58)); controls.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            controls.RowStyles.Add(new RowStyle(SizeType.Absolute, 58)); controls.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
             FlowLayoutPanel actions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, WrapContents = false };
             actions.Controls.AddRange(new Control[] { recordStart, recordStop, saveData, openData, reviewLatest, exportImage, returnLive });
             FlowLayoutPanel range = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, WrapContents = false };
