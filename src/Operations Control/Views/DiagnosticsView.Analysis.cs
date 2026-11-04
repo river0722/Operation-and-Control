@@ -57,7 +57,8 @@ namespace Operations_Control.Views
             content.Controls.Add(metrics, 0, 0); content.Controls.Add(score, 1, 0);
             layout.Controls.Add(settings, 0, 0); layout.Controls.Add(content, 0, 1); layout.Controls.Add(analysisMethod, 0, 2); analysisPanel.Controls.Add(layout);
             analysisTolerance.ValueChanged += delegate { if (reviewing && !loadingHistory) RequestHistoryAnalysis(); };
-            reviewStart.ValueChanged += ScheduleHistoryRange; reviewEnd.ValueChanged += ScheduleHistoryRange;
+            reviewStart.ValueChanged += delegate { SyncHistoryRangeSelector(); ScheduleHistoryRange(reviewStart, EventArgs.Empty); };
+            reviewEnd.ValueChanged += delegate { SyncHistoryRangeSelector(); ScheduleHistoryRange(reviewEnd, EventArgs.Empty); };
             historyRangeTimer.Tick += delegate { historyRangeTimer.Stop(); if (reviewing && !loadingHistory) WithRecordingError(delegate { DrawHistory(); }); };
             Disposed += delegate { historyRangeTimer.Dispose(); analysisTip.Dispose(); };
             return analysisPanel;
@@ -70,7 +71,7 @@ namespace Operations_Control.Views
         private void SetAnalysisVisible(bool visible)
         {
             analysisPanel.Visible = visible; axisLayout.RowStyles[2].Height = visible ? 260 : 0;
-            axisLayout.Height = Math.Max(visible ? 1110 : 850, axisViewport.ClientSize.Height);
+            axisLayout.Height = Math.Max(visible ? 1150 : 890, axisViewport.ClientSize.Height);
         }
         private void InvalidateHistoryAnalysis(string reason)
         {
