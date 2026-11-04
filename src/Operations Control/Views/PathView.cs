@@ -34,6 +34,7 @@ namespace Operations_Control.Views
         private DrawingPath drawing = new DrawingPath();
         private List<MotionPoint> currentStroke;
         private bool lastActivity;
+        private double maximumXSpeed = 1000, maximumYSpeed = 1000, maximumXAcceleration = 100000, maximumYAcceleration = 100000;
         private int displayedSamples;
         private int generation;
         private readonly Label readinessLabel = new Label { AutoSize = false, Width = 460, Height = 32, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(8, 3, 3, 3) };
@@ -141,6 +142,17 @@ namespace Operations_Control.Views
             InvalidatePlan();
         }
         public void RefreshState() { UpdatePollInterval(); UpdateButtons(); }
+        public void ApplyMotionLimits(DeviceConfiguration configuration)
+        {
+            AxisConfiguration x = configuration.Axis(xMotor), y = configuration.Axis(yMotor);
+            double vx = (double)x.MaximumSpeed * 1000 / mapping.XCountsPerUnit;
+            double vy = (double)y.MaximumSpeed * 1000 / mapping.YCountsPerUnit;
+            double ax = (double)x.MaximumAcceleration * 1000000 / mapping.XCountsPerUnit;
+            double ay = (double)y.MaximumAcceleration * 1000000 / mapping.YCountsPerUnit;
+            if (vx == maximumXSpeed && vy == maximumYSpeed && ax == maximumXAcceleration && ay == maximumYAcceleration) return;
+            maximumXSpeed = vx; maximumYSpeed = vy; maximumXAcceleration = ax; maximumYAcceleration = ay;
+            Interlocked.Increment(ref generation); InvalidatePlan();
+        }
         public void ApplySavedPlanningSettings(DeviceConfiguration saved)
         {
             if (saved == null) return;
@@ -172,7 +184,7 @@ namespace Operations_Control.Views
             drawingCanvas.LoadPath(drawing); InvalidatePlan();
             Report(drawing.Source + " · " + drawing.Strokes.Count + " 笔画 / " + drawing.PointCount + " 点", false);
         }
-        private void InvalidatePlan() { plan = null; programText.Clear(); autoAcceleration.Text = "规划自动计算"; UpdateButtons(); }
+        private void InvalidatePlan() { plan = null; programText.Clear(); autoAcceleration.Text = "不设限"; UpdateButtons(); }
         private void Report(string message, bool error)
         {
             feedbackLabel.Text = message; feedbackLabel.ForeColor = error ? Color.Firebrick : SystemColors.ControlText;
@@ -252,13 +264,15 @@ namespace Operations_Control.Views
                     Speed = (double)speed.Value, Acceleration = (double)acceleration.Value, Spacing = (double)spacing.Value,
                     ContinuousPvt = continuousPvt.Checked && interpolation.SelectedIndex == 0,
                     CoordinateSystem = (int)coordinate.Value, ProgramNumber = (int)programNumber.Value, XMotor = xMotor, YMotor = yMotor, Mapping = mapping };
+                options.MaximumXSpeed = maximumXSpeed; options.MaximumYSpeed = maximumYSpeed;
+                options.MaximumXAcceleration = maximumXAcceleration; options.MaximumYAcceleration = maximumYAcceleration;
                 DrawingPath copy = drawing.Copy();
                 MotionPoint initial = session.IsConnected ? mapping.FromCounts(lastSample.XCounts, lastSample.YCounts) : new MotionPoint(0, 0);
                 Report("正在规划完整路径…", false);
                 Background(delegate { return MotionPlanningService.Build(copy, options, initial); }, delegate(MotionPlan value)
                 {
                     plan = value; programText.Text = value.Program;
-                    autoAcceleration.Text = value.Options.Acceleration.ToString("0.###", CultureInfo.InvariantCulture) + " mm/s²";
+                    autoAcceleration.Text = "不设限";
                     Report(value.Options.Mode + " · " + value.Segments.Count + " 段 · " + (value.DurationMs / 1000).ToString("0.00") + " s", false);
                 });
             });

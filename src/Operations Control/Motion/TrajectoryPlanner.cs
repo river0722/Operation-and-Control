@@ -10,8 +10,8 @@ namespace Operations_Control.Motion
         {
             PathGeometry.Validate(drawing); options.Validate();
             if (!options.Mapping.Contains(initial)) throw new ArgumentException("当前位置超出已配置行程。");
-            // 轨迹规划只接受目标速度。加速度由路径几何自动估算，避免用户输入的
-            // 固定加速度在每个折点重复触发减速/加速。
+            // 加速度估算仅保留为规划信息，不参与完整路径的时间约束。
+            // 段时间由目标速度、每轴速度上限和最短段时间决定。
             PlanningOptions effective = CopyOptions(options);
             effective.Acceleration = EstimateAcceleration(drawing, effective.Speed, effective.Spacing);
             MotionPlan plan = new MotionPlan(); plan.Drawing = drawing.Copy(); plan.Options = CopyOptions(effective); plan.InitialPosition = initial;
@@ -42,7 +42,9 @@ namespace Operations_Control.Motion
         {
             PlanningOptions n = new PlanningOptions(); n.Mode = o.Mode; n.Speed = o.Speed; n.Acceleration = o.Acceleration; n.Spacing = o.Spacing; n.ContinuousPvt = o.ContinuousPvt;
             n.MinimumSegmentMs = o.MinimumSegmentMs; n.CoordinateSystem = o.CoordinateSystem; n.ProgramNumber = o.ProgramNumber;
-            n.XMotor = o.XMotor; n.YMotor = o.YMotor; n.Mapping = o.Mapping; return n;
+            n.XMotor = o.XMotor; n.YMotor = o.YMotor; n.Mapping = o.Mapping;
+            n.MaximumXSpeed = o.MaximumXSpeed; n.MaximumYSpeed = o.MaximumYSpeed;
+            n.MaximumXAcceleration = o.MaximumXAcceleration; n.MaximumYAcceleration = o.MaximumYAcceleration; return n;
         }
         private static void AddDrawingBlock(MotionPlan plan, List<MotionPoint> points, PlanningOptions options)
         {
@@ -123,15 +125,10 @@ namespace Operations_Control.Motion
             List<MotionPoint> control = new List<MotionPoint>(); control.Add(points[0]); control.Add(points[0]); control.AddRange(points); control.Add(points[points.Count - 1]); control.Add(points[points.Count - 1]);
             for (int i = 0; i + 3 < control.Count; i++)
             {
-                MotionPoint a = control[i], b = control[i + 1], c = control[i + 2], d = control[i + 3];
-                block.Segments.Add(new MotionSegment { DurationMs = time,
-                    Start = new MotionPoint((a.X + 4 * b.X + c.X) / 6, (a.Y + 4 * b.Y + c.Y) / 6),
-                    End = new MotionPoint((b.X + 4 * c.X + d.X) / 6, (b.Y + 4 * c.Y + d.Y) / 6),
-                    StartVelocity = new MotionPoint((c.X - a.X) * 500 / time, (c.Y - a.Y) * 500 / time),
-                    EndVelocity = new MotionPoint((d.X - b.X) * 500 / time, (d.Y - b.Y) * 500 / time) });
+                block.Segments.Add(TrajectoryMath.SplineSegment(control[i], control[i + 1], control[i + 2], control[i + 3], time));
             }
             Stretch(block, options); block.SplineTimeMs = block.Segments[0].DurationMs;
-            if (block.SplineTimeMs > 4000) throw new ArgumentException("Spline 分段时间超过 4000 ms，请缩小采样间距或提高速度/加速度限制。");
+            if (block.SplineTimeMs > 4000) throw new ArgumentException("Spline 分段时间超过 4000 ms，请缩小采样间距或提高速度限制。");
             return block;
         }
         private static void Stretch(PlannedStroke block, PlanningOptions options)
@@ -146,8 +143,7 @@ namespace Operations_Control.Motion
                 double by = 6 * (s.End.Y - s.Start.Y) / t - 4 * s.StartVelocity.Y - 2 * s.EndVelocity.Y;
                 double vx = VelocityBound(ax, bx, s.StartVelocity.X), vy = VelocityBound(ay, by, s.StartVelocity.Y);
                 factor = Math.Max(factor, Math.Sqrt(vx * vx + vy * vy) / options.Speed);
-                double a0 = Math.Sqrt(bx * bx + by * by) / t, a1 = Math.Sqrt((2 * ax + bx) * (2 * ax + bx) + (2 * ay + by) * (2 * ay + by)) / t;
-                factor = Math.Max(factor, Math.Sqrt(Math.Max(a0, a1) / options.Acceleration));
+                factor = Math.Max(factor, Math.Max(vx / options.MaximumXSpeed, vy / options.MaximumYSpeed));
             }
             factor *= 1.00001;
             foreach (MotionSegment s in block.Segments)

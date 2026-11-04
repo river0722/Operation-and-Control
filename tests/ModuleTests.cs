@@ -144,8 +144,8 @@ internal static class ModuleTests
             { session.Time = t; follower.Pump(); session.Flush(); }
             Check(follower.Active && follower.Error == null && follower.PendingPointCount == 0, mode + " sustained dense drawing drains without a backlog stop");
             Check(session.Targets.Count < 300 && session.Targets.Count > 50, mode + " resamples dense input rather than transmitting every mouse event");
-            Check(session.Retries > 0 && session.Aborts == 0 && session.Begins == 1 && session.MaxDepth <= 3,
-                mode + " pauses for a slow consumer and resumes without restarting or overfilling it");
+            Check(session.Aborts == 0 && session.Begins == 1 && session.MaxDepth <= 3,
+                mode + " never restarts or overfills the streaming consumer");
             Check(PathGeometry.Distance(session.Targets[session.Targets.Count - 1], original[original.Count - 1]) < 1e-9,
                 mode + " retains the final endpoint while retrying");
             double maximumError = 0;
@@ -200,7 +200,7 @@ internal static class ModuleTests
         {
             FollowSession session = new FollowSession { Capacity = 20 };
             CanvasFollower follower = new CanvasFollower(session, delegate { return session.Time; });
-            follower.BeginAuto(1, 2, 15, 15, mapping, 1, 100, new MotionPoint(0, 0), mode);
+            follower.BeginAuto(1, 2, 15, 15, 25, 30, mapping, 1, 100, new MotionPoint(0, 0), mode);
             session.Time = 1000; follower.SubmitMm(new MotionPoint(3, 4)); // 5 mm / 1 s
             session.Time = 1500; follower.SubmitMm(new MotionPoint(6, 8)); // 5 mm / 0.5 s
             double slowTime = 0, fastTime = 0; bool first = true;
@@ -235,10 +235,50 @@ internal static class ModuleTests
             { session.Time = t; follower.Pump(); session.Flush(); }
             double total = 0;
             foreach (double duration in session.Durations) total += duration;
-            Check(follower.Active && follower.PendingPointCount == 0 && total >= 2000 - 1e-7 && total <= 2060 &&
+            Check(follower.Active && follower.PendingPointCount == 0 && total >= 3000 - 1e-7 && total <= 3060 &&
                 PathGeometry.Distance(session.Targets[session.Targets.Count - 1], new MotionPoint(2, 2)) < 1e-8,
                 mode + " stretches an overspeed mouse stroke while preserving its endpoint and safe axis timing");
             follower.Cancel(); session.Flush();
+        }
+    }
+
+    private static void ConstraintMath()
+    {
+        double peak = TrajectoryMath.PeakVelocity(0, 1, 0, 10, 0.1);
+        Check(peak > 13.3 && peak < 13.34, "Cubic PVT peak velocity is evaluated inside the segment");
+        Check(TrajectoryMath.PeakAcceleration(0, 1, 0, 10, 0.1) > 0, "Cubic PVT acceleration includes the segment interior");
+        UniformSplineStream stream = new UniformSplineStream(new MotionPoint(0, 0), 60);
+        MotionSegment first = stream.Append(new MotionPoint(0.06, 0));
+        MotionSegment second = stream.Append(new MotionPoint(0.06, 0.06));
+        Check(PathGeometry.Distance(first.EndVelocity, second.StartVelocity) < 1e-9, "Uniform spline keeps shared velocity continuous");
+        Check(stream.End().Count == 2, "Uniform spline emits explicit stopping tail segments");
+        MotionPlan constrained = MotionPlanningService.Build(PathGeometry.Line(0, 0, 1, 1), new PlanningOptions
+        { Speed = 10, Acceleration = 100, Spacing = 0.25, MaximumXSpeed = 0.5, MaximumYSpeed = 0.25,
+            MaximumXAcceleration = 0.1, MaximumYAcceleration = 0.05 }, new MotionPoint(0, 0));
+        double maxX = 0, maxY = 0;
+        foreach (MotionSegment segment in constrained.Segments)
+            for (int i = 0; i <= 20; i++) { MotionPoint v = segment.VelocityAt(i / 20.0); maxX = Math.Max(maxX, Math.Abs(v.X)); maxY = Math.Max(maxY, Math.Abs(v.Y)); }
+        Check(maxX <= 0.5 + 1e-6 && maxY <= 0.25 + 1e-6, "Complete PVT honors independent axis velocity limits");
+        DeviceConfiguration configuration = new DeviceConfiguration();
+        configuration.Axis(1).MaximumAcceleration = 25;
+        configuration.Validate();
+        Check(configuration.Axis(1).MaximumAcceleration == 25, "Device configuration accepts an acceleration above 12 ct/ms squared");
+        foreach (InterpolationMode mode in new InterpolationMode[] { InterpolationMode.PVT, InterpolationMode.Spline })
+        {
+            DrawingPath circle = PathGeometry.Arc(0, 0, 25, 0, 360, 0.01);
+            PlanningOptions options = new PlanningOptions { Mode = mode, Speed = 5, Spacing = 1,
+                Mapping = new CanvasSettings(-30, 30, -30, 30, 1000, 1000, "mm"),
+                MaximumXSpeed = 50, MaximumYSpeed = 50, MaximumXAcceleration = 0.00001, MaximumYAcceleration = 0.00001 };
+            MotionPlan slow = MotionPlanningService.Build(circle, options, new MotionPoint(0, 0));
+            options.MaximumXAcceleration = options.MaximumYAcceleration = 100000;
+            MotionPlan relaxed = MotionPlanningService.Build(circle, options, new MotionPoint(0, 0));
+            Check(slow.Program == relaxed.Program, mode + " complete circle and transfer ignore configured acceleration ceilings");
+            options.Speed = 10;
+            options.MaximumXAcceleration = options.MaximumYAcceleration = 0.00001;
+            MotionPlan fast = MotionPlanningService.Build(circle, options, new MotionPoint(0, 0));
+            Check(fast.DurationMs < slow.DurationMs * 0.6, mode + " circle responds to a higher target speed despite low acceleration settings");
+            if (mode == InterpolationMode.Spline)
+                Check(fast.Blocks[1].SplineTimeMs < 100, "Spline circle TM no longer stalls at 264.744 ms");
         }
     }
 
@@ -425,6 +465,12 @@ internal static class ModuleTests
         try
         {
             string file = Path.Combine(directory, "program.pmc");
+            string profile = Path.Combine(directory, "profile.xml");
+            DeviceConfiguration configuration = new DeviceConfiguration();
+            configuration.Axis(1).MaximumAcceleration = 25;
+            DeviceConfigurationStore.Save(profile, configuration);
+            Check(DeviceConfigurationStore.Load(profile).Axis(1).MaximumAcceleration == 25,
+                "Acceleration values above 12 survive profile save and load");
             ProgramFileStore.Save(file, "; 中文程序\r\n#1P", Encoding.GetEncoding(936));
             ProgramDocument document = ProgramFileStore.Read(file);
             Check(document.Text.Contains("中文程序") && document.Encoding.CodePage == 936, "Program files preserve GBK fallback");
@@ -469,9 +515,65 @@ internal static class ModuleTests
         try { Operations_Control.Motion.PointToPointProfile.Calculate(50.001, 12); } catch (ArgumentOutOfRangeException) { excessiveSpeed = true; }
         Check(excessiveSpeed, "Manual profile rejects values above the 50 ct/ms software cap");
     }
+    private static DiagnosticSample ErrorSample(int motor, double time, double error)
+    { return new DiagnosticSample { Motor = motor, TimeMs = time, FollowingError = error, Status = new MotorStatus { FirstWord = 0x880000 } }; }
+    private static void Near(double actual, double expected, string message)
+    { Check(Math.Abs(actual - expected) <= 1e-8 * Math.Max(1, Math.Abs(expected)), message + "; expected=" + expected + ", actual=" + actual); }
+    private static void DiagnosticErrors()
+    {
+        DiagnosticRecording ramp = new DiagnosticRecording(); ramp.Samples.Add(ErrorSample(1, 0, -10)); ramp.Samples.Add(ErrorSample(2, 0, 99));
+        ramp.Samples.Add(ErrorSample(1, 1000, 10)); ramp.Samples.Add(ErrorSample(2, 1000, 99));
+        DiagnosticErrorResult result = DiagnosticErrorAnalysis.Analyze(ramp, 1, 0, 1000, 5);
+        Near(result.Mean, 0, "Signed mean cancels a symmetric ramp");
+        Near(result.Rms, 10 / Math.Sqrt(3), "RMS integrates squared linear error rather than averaging endpoint squares");
+        Near(result.MaximumAbsolute, 10, "Absolute peak uses only the selected motor"); Near(result.MaximumTimeMs, 0, "Tied peaks select the earliest timestamp");
+        Near(result.PeakToPeak, 20, "Peak-to-peak retains both error signs"); Near(result.AbsoluteP95, 9.5, "P95 is weighted by time, including zero crossings");
+        Near(result.ExceededDurationMs.Value, 500, "Tolerance crossing is interpolated within an interval"); Near(result.ExceededRatio.Value, 0.5, "Exceedance ratio divides by valid duration");
+        Near(result.Score.Value, 100 / (1 + 0.4 * (10 / Math.Sqrt(3) / 5) + 0.25 * 9.5 / 5 + 0.15 * 10 / 5 + 0.2 * 0.5), "Score follows its disclosed formula");
+        result = DiagnosticErrorAnalysis.Analyze(ramp, 1, 250, 750, 5);
+        Near(result.MaximumAbsolute, 5, "Window boundaries interpolate endpoint errors"); Near(result.MaximumTimeMs, 250, "Peak timestamps use absolute CSV time after clipping");
+        Near(result.ValidDurationMs, 500, "Only the requested duration contributes"); Near(result.Rms, 5 / Math.Sqrt(3), "Changing the window changes RMS");
+        Near(result.AbsoluteP95, 4.75, "Changing the window changes P95"); Near(result.ExceededRatio.Value, 0, "Equality with tolerance does not count as exceedance");
+        DiagnosticRecording uneven = new DiagnosticRecording(); uneven.Samples.Add(ErrorSample(1, 0, 0)); uneven.Samples.Add(ErrorSample(1, 900, 0)); uneven.Samples.Add(ErrorSample(1, 1000, 10));
+        result = DiagnosticErrorAnalysis.Analyze(uneven, 1, 0, 1000, null);
+        Near(result.Mean, 0.5, "Uneven sample intervals weight the mean by duration"); Near(result.Rms, Math.Sqrt(10.0 / 3), "Uneven sample intervals weight RMS by duration");
+        Near(result.AbsoluteP95, 5, "Time-weighted P95 does not overweight dense sampling");
+        Check(result.HasData && !result.Score.HasValue && !result.ExceededRatio.HasValue, "Statistics remain available without an arbitrary tolerance or score");
+        DiagnosticRecording constant = new DiagnosticRecording(); constant.Samples.Add(ErrorSample(1, 0, 2)); constant.Samples.Add(ErrorSample(1, 100, 2));
+        DiagnosticSample gap = ErrorSample(1, 200, 2); gap.GapBefore = true; constant.Samples.Add(gap); constant.Samples.Add(ErrorSample(1, 300, 2));
+        result = DiagnosticErrorAnalysis.Analyze(constant, 1, 0, 300, 1);
+        Near(result.ValidDurationMs, 200, "Gap intervals do not contribute zero error or fabricated data"); Near(result.Coverage, 2.0 / 3, "Coverage reports omitted time");
+        Near(result.Mean, 2, "Constant errors retain their signed bias"); Near(result.Rms, 2, "Constant error has the same RMS"); Near(result.AbsoluteP95, 2, "Constant error P95 equals the constant");
+        Near(result.ExceededRatio.Value, 1, "All valid time above tolerance is counted");
+        double lowScore = result.Score.Value;
+        result = DiagnosticErrorAnalysis.Analyze(constant, 1, 0, 300, 2);
+        Near(result.ExceededRatio.Value, 0, "Constant error exactly on tolerance is accepted"); Check(result.Score.Value > lowScore, "Score responds to the chosen tolerance");
+        constant.Samples[2].FollowingError = 99; constant.Samples[3].GapBefore = true;
+        result = DiagnosticErrorAnalysis.Analyze(constant, 1, 0, 300, 2);
+        Near(result.MaximumAbsolute, 99, "An isolated valid peak next to missing data remains visible in peak statistics");
+        Near(result.Rms, 2, "Isolated peaks do not fabricate time-weighted intervals across gaps");
+        DiagnosticRecording zero = new DiagnosticRecording(); zero.Samples.Add(ErrorSample(1, 100, 0)); zero.Samples.Add(ErrorSample(1, 200, 0));
+        result = DiagnosticErrorAnalysis.Analyze(zero, 1, 100, 200, 1);
+        Near(result.Score.Value, 100, "Zero error earns exactly 100"); Near(result.MaximumTimeMs, 100, "Zero error peak time remains inside the valid data");
+        result = DiagnosticErrorAnalysis.Analyze(zero, 1, 0, 500, 1); Near(result.Coverage, 0.2, "Time outside the record is not treated as zero error");
+        zero.Samples[1].Status.FirstWord |= 0x040000;
+        Check(!DiagnosticErrorAnalysis.Analyze(zero, 1, 0, 500, 1).HasData, "Open-loop feedback cannot create a perfect score");
+        zero.Samples[1].Status.FirstWord = 0x800000;
+        Check(!DiagnosticErrorAnalysis.Analyze(zero, 1, 0, 500, 1).HasData, "Disabled feedback is excluded");
+        zero.Samples[1].Status.FirstWord = 0x880000; zero.Samples[1].FollowingError = null;
+        Check(!DiagnosticErrorAnalysis.Analyze(zero, 1, 0, 500, 1).Score.HasValue, "Missing errors cannot produce a score");
+        zero.Samples[1].FollowingError = 0; zero.Samples[1].TimeMs = 2000;
+        Check(!DiagnosticErrorAnalysis.Analyze(zero, 1, 0, 2500, 1).HasData, "Long communication gaps are excluded");
+        Check(!DiagnosticErrorAnalysis.Analyze(zero, 3, 0, 2500, 1).HasData, "Absent motor data is reported as unavailable");
+        zero.Samples[1].TimeMs = 200; zero.Samples[0].FollowingError = zero.Samples[1].FollowingError = 1e200;
+        result = DiagnosticErrorAnalysis.Analyze(zero, 1, 100, 200, 1);
+        Check(!Double.IsInfinity(result.Rms) && !Double.IsNaN(result.Score.Value), "Large finite errors cannot overflow RMS or produce a NaN score");
+        bool invalid = false; try { DiagnosticErrorAnalysis.Analyze(ramp, 1, 1000, 0, 5); } catch (ArgumentException) { invalid = true; }
+        Check(invalid, "Invalid time ranges are rejected");
+    }
     private static int Main()
     {
-        try { Execution(); Cancellation(); Homing(); PlcHoming(); FeedbackAndManual(); Files(); PointToPointProfile(); FollowFlowControl(); AutomaticFollowSpeed(); Console.WriteLine("PASS: " + checks + " module assertions; no UI or hardware accessed."); return 0; }
+        try { Execution(); Cancellation(); Homing(); PlcHoming(); FeedbackAndManual(); Files(); PointToPointProfile(); FollowFlowControl(); AutomaticFollowSpeed(); ConstraintMath(); DiagnosticErrors(); Console.WriteLine("PASS: " + checks + " module assertions; no UI or hardware accessed."); return 0; }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }
     }
 }

@@ -39,6 +39,12 @@
     <Compile Include="Application\AlarmService.cs" />
     <Compile Include="Views\AxisStatusView.cs"><SubType>UserControl</SubType></Compile>
     <Compile Include="Views\DiagnosticsView.cs"><SubType>UserControl</SubType></Compile>
+    <Compile Include="Views\DiagnosticsView.Recording.cs"><DependentUpon>DiagnosticsView.cs</DependentUpon></Compile>
+    <Compile Include="Views\DiagnosticsView.Analysis.cs"><DependentUpon>DiagnosticsView.cs</DependentUpon></Compile>
+    <Compile Include="Models\DiagnosticRecording.cs" />
+    <Compile Include="Files\DiagnosticRecordingStore.cs" />
+    <Compile Include="Application\DiagnosticRecorder.cs" />
+    <Compile Include="Motion\DiagnosticErrorAnalysis.cs" />
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
@@ -51,6 +57,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Application\OperationState.cs" />
+    <Compile Include="Motion\TrajectoryMath.cs" />
     <Compile Include="Application\ManualMotionService.cs" />
     <Compile Include="Application\PulseOutputRepair.cs" />
     <Compile Include="Application\FeedbackService.cs" />

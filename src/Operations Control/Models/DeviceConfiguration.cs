@@ -10,6 +10,7 @@ namespace Operations_Control.Models
         public bool TravelConfigured;
         public double MinimumCounts = -1000, MaximumCounts = 1000;
         public decimal MaximumSpeed = 1;
+        public decimal MaximumAcceleration = 0.01M; // ct/ms²; retained when loading older XML profiles
         public double PositionToleranceCounts = 0.5;
         public string ResetCommand = String.Empty;
     }
@@ -49,6 +50,7 @@ namespace Operations_Control.Models
             foreach (AxisConfiguration axis in Axes)
             {
                 if (axis.Motor < 1 || axis.Motor > 8 || !seen.Add(axis.Motor) || axis.MaximumSpeed <= 0 || axis.MaximumSpeed > AxisConfiguration.MaximumSupportedSpeedCtPerMs ||
+                    axis.MaximumAcceleration <= 0 ||
                     !PlanningOptions.Finite(axis.PositionToleranceCounts) || axis.PositionToleranceCounts <= 0 || axis.PositionToleranceCounts > 1000000 ||
                     !PlanningOptions.Finite(axis.MinimumCounts) || !PlanningOptions.Finite(axis.MaximumCounts) || axis.MinimumCounts >= axis.MaximumCounts ||
                     Math.Abs(axis.MinimumCounts) > 100000000 || Math.Abs(axis.MaximumCounts) > 100000000)

@@ -433,6 +433,227 @@ internal static class MotorDebugTests
     { System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew(); while (!condition() && watch.ElapsedMilliseconds < 5000) Pump(20); Check(condition(), message); }
     private static void Snapshot(Form form, string path)
     { using (Bitmap bitmap = new Bitmap(form.Width, form.Height)) { form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size)); bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Png); } }
+    private static System.Collections.IList TrendValues(DiagnosticsView view, string name)
+    { return Field<System.Collections.IList>(Field<Control>(view, name), "values"); }
+    private static void WaitForAnalysis(DiagnosticsView view)
+    { Until(delegate { return Field<DiagnosticErrorResult>(view, "historyAnalysis") != null; }, "History analysis finishes for the current selection"); }
+    private static ControllerFeedback RecordingFeedback(double time, double position, bool moving)
+    {
+        AxisSample x = new AxisSample(1, position, null, DateTime.Now) { TimeMs = time, FollowingError = -0.125, Status = Status(!moving, true, false, false, false) };
+        AxisSample y = new AxisSample(2, position * 2, null, DateTime.Now) { TimeMs = time - 10, Status = Status(!moving, true, false, false, false) };
+        return new ControllerFeedback(new ControllerSnapshot { XTimeMs = time, YTimeMs = time - 10 }, new AxisSample[] { x, y, x });
+    }
+    private static void RecordingFiles(string directory)
+    {
+        Directory.CreateDirectory(directory);
+        using (DiagnosticRecorder recorder = new DiagnosticRecorder { OutputDirectory = Path.Combine(directory, "recording-tests") })
+        {
+            recorder.Observe(RecordingFeedback(1000, 0, false), true, "simulation");
+            Check(!recorder.Active, "Recorder remains idle until explicitly started");
+            ControllerFeedback moving = RecordingFeedback(1100, 10, true);
+            recorder.Observe(moving, true, "simulation");
+            Check(!recorder.Active && recorder.FilePath == null, "Motion alone never starts recording or creates a file");
+            recorder.StartManual(RecordingFeedback(1000, 0, false), "simulation");
+            recorder.Observe(moving, true, "simulation");
+            Check(recorder.Active && recorder.SampleCount == 4, "Manual recording captures both axes and deduplicates selected X axis");
+            recorder.Observe(moving, true, "simulation");
+            Check(recorder.SampleCount == 4, "Repeated UI refresh cannot duplicate raw CSV samples");
+            recorder.Observe(RecordingFeedback(1200, 20, false), true, "simulation");
+            Check(recorder.Active, "Recording continues when motion stops");
+            recorder.Observe(RecordingFeedback(1800, 20, false), true, "simulation");
+            Check(recorder.Active, "An idle interval cannot end manual recording");
+            recorder.Stop();
+            DiagnosticRecording saved = DiagnosticRecordingStore.Load(recorder.FilePath);
+            Check(saved.Source == "simulation" && saved.Samples.Count == 8, "CSV reload preserves source and all unique axis samples");
+            Check(saved.Samples[0].TimeMs == 10 && saved.Samples[1].TimeMs == 0 && saved.Samples[0].FollowingError == -0.125 && saved.Samples[1].FollowingError == null,
+                "CSV roundtrip preserves per-axis times, fractional errors and missing data");
+            Check(saved.Samples[0].Status.FirstWord == 0x882000, "CSV preserves raw motor status words");
+            recorder.StartManual(RecordingFeedback(1900, 20, false), "hardware");
+            recorder.Observe(RecordingFeedback(2000, 30, true), true, "hardware");
+            recorder.Observe(RecordingFeedback(3000, 40, false), true, "hardware");
+            recorder.Observe(null, false, "hardware");
+            Check(recorder.Active, "Manual recording remains active across idle and feedback gaps");
+            recorder.Observe(RecordingFeedback(4500, 50, false), true, "hardware"); recorder.Stop();
+            DiagnosticRecording manual = DiagnosticRecordingStore.Load(recorder.FilePath);
+            Check(manual.Source == "hardware" && manual.Samples.Count == 8 && manual.Samples[6].GapBefore && manual.Samples[7].GapBefore,
+                "Manual recording saves all axes and marks resumed feedback as a gap");
+            string invalid = Path.Combine(directory, "invalid-recording.csv"); string[] lines = File.ReadAllLines(recorder.FilePath);
+            lines[2] = "1,NaN,0,0,882000,000001,0"; File.WriteAllLines(invalid, lines);
+            bool rejected = false; try { DiagnosticRecordingStore.Load(invalid); } catch (FormatException) { rejected = true; }
+            Check(rejected, "Replay rejects nonfinite timestamps instead of drawing corrupt data");
+            recorder.Observe(RecordingFeedback(5000, 60, true), true, "hardware");
+            Check(!recorder.Active, "A stopped recording cannot restart during motion");
+            recorder.Observe(RecordingFeedback(5100, 60, false), true, "hardware");
+            recorder.Observe(RecordingFeedback(5200, 70, true), true, "hardware");
+            Check(!recorder.Active, "Subsequent motions also require an explicit recording start");
+            recorder.StartManual(RecordingFeedback(5200, 70, true), "hardware");
+            recorder.Flush();
+            Check(DiagnosticRecordingStore.Load(recorder.FilePath).Samples.Count == recorder.SampleCount, "Flushing permits a readable snapshot while recording continues");
+            string snapshot = Path.Combine(directory, "active-recording-snapshot.csv");
+            DiagnosticRecordingStore.CopySnapshot(recorder.FilePath, snapshot);
+            Check(DiagnosticRecordingStore.Load(snapshot).Samples.Count == recorder.SampleCount, "Windows can export a complete snapshot without closing the active writer");
+            recorder.Observe(null, false, "hardware");
+            Check(recorder.Active, "Communication gaps do not end manual recording");
+            recorder.Stop();
+            Check(!recorder.Active && File.Exists(recorder.FilePath), "Explicit stop finalizes and preserves raw data");
+            string[] duplicate = File.ReadAllLines(recorder.FilePath);
+            using (StreamWriter writer = File.AppendText(recorder.FilePath)) writer.WriteLine(duplicate[duplicate.Length - 1]);
+            rejected = false; try { DiagnosticRecordingStore.Load(recorder.FilePath); } catch (FormatException) { rejected = true; }
+            Check(rejected, "Replay rejects duplicate or reversed per-axis timestamps");
+        }
+    }
+    private static void DiagnosticsTrends(string directory)
+    {
+        Directory.CreateDirectory(directory);
+        using (Form form = new Form { Text = "位置、速度与跟随误差 · 模拟数据验证", ClientSize = new Size(1280, 1000), Font = new Font("Microsoft YaHei UI", 10) })
+        using (DiagnosticsView view = new DiagnosticsView { Dock = DockStyle.Fill })
+        {
+            try
+            {
+            form.Controls.Add(view); form.Show();
+            DiagnosticRecorder recorder = Field<DiagnosticRecorder>(view, "recorder");
+            recorder.OutputDirectory = Path.Combine(directory, "recordings");
+            double time = 1000;
+            ControllerFeedback feedback = null;
+            for (int i = 0; i < 340; i++)
+            {
+                time += i % 2 == 0 ? 50 : 90;
+                double angle = (time - 1000) / 3500, command = 1000 * Math.Sin(angle), error = 12 * Math.Cos(angle);
+                AxisSample sample = new AxisSample(1, command - error, null, DateTime.Now)
+                    { TimeMs = time, FollowingError = error, Status = Status(false, true, false, false, false) };
+                feedback = new ControllerFeedback(null, new AxisSample[] { sample });
+                view.Display(feedback, true, 1, false);
+                if (i == 0) view.StartRecording();
+            }
+            view.StopRecording();
+            Check(TrendValues(view, "positionTrend").Count == 300 && TrendValues(view, "velocityTrend").Count == 300 && TrendValues(view, "trend").Count == 300, "All diagnostic charts retain the same latest 300 samples");
+            view.Display(feedback, true, 1, false);
+            Check(TrendValues(view, "positionTrend").Count == 300, "Repeated UI refresh does not duplicate feedback samples");
+            object last = TrendValues(view, "positionTrend")[299];
+            Check((double)last.GetType().GetField("TimeMs").GetValue(last) == time, "Charts preserve measured sample times for the time axis");
+            object velocity = TrendValues(view, "velocityTrend")[299];
+            double liveVelocity = (double)velocity.GetType().GetField("Velocity").GetValue(velocity);
+            double expectedVelocity = (feedback.Find(1).Position - (1000 * Math.Sin((time - 90 - 1000) / 3500) - 12 * Math.Cos((time - 90 - 1000) / 3500))) * 1000 / 90;
+            Check(Math.Abs(liveVelocity - expectedVelocity) < 1e-8, "Velocity uses actual nonuniform sample intervals and ct/s units");
+            Pump(40); Snapshot(form, Path.Combine(directory, "diagnostics-position-comparison.png"));
+            view.ExportTrendImage(Path.Combine(directory, "diagnostics-live-export.png"));
+            string csv = Path.Combine(directory, "diagnostics-saved.csv"); view.SaveRecordingCopy(csv);
+            Check(DiagnosticRecordingStore.Load(csv).Samples.Count == 340, "Saved recording preserves samples older than the 300-point live window");
+            view.ReviewRecording(csv);
+            WaitForAnalysis(view);
+            Check(TrendValues(view, "positionTrend").Count == 340 && TrendValues(view, "velocityTrend").Count == 340, "CSV replay reconstructs complete position and velocity history");
+            velocity = TrendValues(view, "velocityTrend")[339];
+            Check(Math.Abs((double)velocity.GetType().GetField("Velocity").GetValue(velocity) - liveVelocity) < 1e-8, "Reloading raw CSV reproduces the live velocity exactly");
+            int historyCount = TrendValues(view, "positionTrend").Count;
+            view.StartRecording();
+            AxisSample duringReview = new AxisSample(1, 75, null, DateTime.Now) { TimeMs = time + 50, FollowingError = 2, Status = Status(false, true, false, false, false) };
+            view.Display(new ControllerFeedback(null, new AxisSample[] { duringReview }), true, 1, false);
+            string frozen = Path.Combine(directory, "review-snapshot.csv"); view.SaveRecordingCopy(frozen);
+            Check(DiagnosticRecordingStore.Load(frozen).Samples.Count == 340, "Exporting the reviewed CSV preserves its displayed snapshot while a different recording grows");
+            Field<Button>(view, "reviewLatest").PerformClick();
+            Until(delegate { return !Field<bool>(view, "loadingHistory") && TrendValues(view, "positionTrend").Count == 2; }, "Background review opens a frozen snapshot while the recorder is writing");
+            Check(recorder.Active, "Opening active data never stops recording");
+            view.StopRecording();
+            Check(historyCount == 340 && DiagnosticRecordingStore.Load(recorder.FilePath).Samples.Count == 2, "Live recording retains its own data independently of history");
+            view.ReviewRecording(csv);
+            WaitForAnalysis(view);
+            view.ExportTrendImage(Path.Combine(directory, "diagnostics-history-export.png"));
+            Field<NumericUpDown>(view, "reviewStart").Value = 5; Field<NumericUpDown>(view, "reviewEnd").Value = 10;
+            Until(delegate { DiagnosticErrorResult result = Field<DiagnosticErrorResult>(view, "historyAnalysis"); return result != null && result.StartMs == 5000 && result.EndMs == 10000; }, "Editing the time range automatically refreshes analysis without an apply click");
+            Check((double)Field<Control>(view, "velocityTrend").GetType().GetField("RangeStartMs").GetValue(Field<Control>(view, "velocityTrend")) == 5000, "History charts share the requested time window; actual=" + Field<Control>(view, "velocityTrend").GetType().GetField("RangeStartMs").GetValue(Field<Control>(view, "velocityTrend")));
+            view.ExportTrendImage(Path.Combine(directory, "diagnostics-history-window.png"));
+            view.ReturnToLive(); view.Display(feedback, true, 1, false);
+            Check(TrendValues(view, "velocityTrend").Count == 1, "Returning live clears replay history instead of mixing recordings");
+            form.ClientSize = new Size(900, 580); Pump(40);
+            Check(Field<Control>(view, "positionTrend").Height > 150 && Field<Control>(view, "trend").Height > 100, "Both charts remain visible at compact window size");
+            Snapshot(form, Path.Combine(directory, "diagnostics-position-compact.png"));
+            view.Display(feedback, false, 1, false);
+            Check(Field<Control>(view, "positionTrend").GetType().GetField("Stale").GetValue(Field<Control>(view, "positionTrend")).Equals(true), "Stale position data is explicitly marked");
+            AxisSample missing = new AxisSample(1, 10, null, DateTime.Now) { TimeMs = time + 100, Status = Status(false, true, false, false, false) };
+            view.Display(new ControllerFeedback(null, new AxisSample[] { missing }), true, 1, false);
+            last = TrendValues(view, "positionTrend")[1];
+            Check(last.GetType().GetField("Command").GetValue(last) == null && (bool)last.GetType().GetField("GapBefore").GetValue(last), "Missing command feedback and stale intervals cannot create a false command segment");
+            velocity = TrendValues(view, "velocityTrend")[1];
+            Check(velocity.GetType().GetField("Velocity").GetValue(velocity) == null, "No velocity is invented across a stale interval");
+            AxisSample openLoop = new AxisSample(2, 20, null, DateTime.Now)
+                { TimeMs = time + 200, FollowingError = 0, Status = Status(false, false, false, false, false) };
+            view.Display(new ControllerFeedback(null, new AxisSample[] { openLoop }), true, 2, false);
+            last = TrendValues(view, "positionTrend")[0];
+            Check(TrendValues(view, "positionTrend").Count == 1 && TrendValues(view, "velocityTrend").Count == 1 && TrendValues(view, "trend").Count == 1, "Changing selected motor clears all old histories");
+            Check(last.GetType().GetField("Command").GetValue(last) == null && (double)last.GetType().GetField("Position").GetValue(last) == 20, "Open-loop feedback retains actual position without inventing command position");
+            AxisSample v0 = new AxisSample(3, 0, null, DateTime.Now) { TimeMs = 1000, FollowingError = 2, Status = Status(false, true, false, false, false) };
+            AxisSample v1 = new AxisSample(3, 10, null, DateTime.Now) { TimeMs = 1050, FollowingError = 4, Status = Status(false, true, false, false, false) };
+            view.Display(new ControllerFeedback(null, new AxisSample[] { v0 }), true, 3, false);
+            view.Display(new ControllerFeedback(null, new AxisSample[] { v1 }), true, 3, false);
+            velocity = TrendValues(view, "velocityTrend")[1];
+            Check((double)velocity.GetType().GetField("Velocity").GetValue(velocity) == 200 && (double)velocity.GetType().GetField("CommandVelocity").GetValue(velocity) == 240,
+                "Actual and command velocity use their respective position differences");
+            AxisSample longGap = new AxisSample(3, 100, null, DateTime.Now) { TimeMs = 3000, FollowingError = 4, Status = v1.Status };
+            view.Display(new ControllerFeedback(null, new AxisSample[] { longGap }), true, 3, false);
+            velocity = TrendValues(view, "velocityTrend")[2];
+            Check(velocity.GetType().GetField("Velocity").GetValue(velocity) == null && velocity.GetType().GetField("CommandVelocity").GetValue(velocity) == null,
+                "Long intervals produce a velocity gap in both series");
+            form.Close();
+            }
+            catch (Exception error) { Console.Error.WriteLine("Diagnostics trend verification failed: " + error); throw; }
+        }
+    }
+    private static void DiagnosticAnalysisInterface(string directory)
+    {
+        DiagnosticRecording recording = new DiagnosticRecording { Source = "simulation", StartedUtc = DateTime.UtcNow };
+        for (int i = 0; i <= 4; i++)
+        {
+            recording.Samples.Add(new DiagnosticSample { Motor = 1, TimeMs = i * 250, Position = i * 100, FollowingError = i, Status = Status(false, true, false, false, false) });
+            recording.Samples.Add(new DiagnosticSample { Motor = 2, TimeMs = i * 250, Position = i * 100, FollowingError = 4, Status = Status(false, true, false, false, false) });
+            recording.Samples.Add(new DiagnosticSample { Motor = 3, TimeMs = i * 250, Position = i * 100, FollowingError = 0, Status = Status(false, false, false, false, false) });
+        }
+        string csv = Path.Combine(directory, "analysis-fixture.csv"); DiagnosticRecordingStore.Save(csv, recording);
+        using (Form form = new Form { Text = "CSV 偏差统计与评分 · 模拟数据验证", ClientSize = new Size(1280, 1200), Font = new Font("Microsoft YaHei UI", 10) })
+        using (DiagnosticsView view = new DiagnosticsView { Dock = DockStyle.Fill })
+        {
+            try
+            {
+            form.Controls.Add(view); form.Show(); view.ReviewRecording(csv); WaitForAnalysis(view);
+            DiagnosticErrorResult result = Field<DiagnosticErrorResult>(view, "historyAnalysis");
+            Check(result.Tolerance == 10 && Math.Abs(result.Mean - 2) < 1e-8, "CSV review immediately shows time-weighted metrics using the requested initial 10 ct tolerance");
+            Check(Field<Label>(view, "errorMeanValue").Text == "2" && Field<Label>(view, "errorPeakValue").Text.Contains("1 s") && Field<Label>(view, "errorScoreValue").Text != "—", "The page displays metric values, absolute peak time and a score");
+            Snapshot(form, Path.Combine(directory, "diagnostics-analysis-review.png")); view.ExportTrendImage(Path.Combine(directory, "diagnostics-analysis-export.png"));
+            Field<NumericUpDown>(view, "reviewStart").Value = 0.25M; Field<NumericUpDown>(view, "reviewEnd").Value = 0.75M;
+            Until(delegate { DiagnosticErrorResult current = Field<DiagnosticErrorResult>(view, "historyAnalysis"); return current != null && current.StartMs == 250 && current.EndMs == 750; }, "Time editors trigger a debounced automatic analysis refresh");
+            result = Field<DiagnosticErrorResult>(view, "historyAnalysis");
+            Check(Math.Abs(result.MaximumAbsolute - 3) < 1e-8 && result.MaximumTimeMs == 750, "Clipped statistics and peak time follow the selected window");
+            double score = result.Score.Value;
+            Field<NumericUpDown>(view, "analysisTolerance").Value = 1;
+            Until(delegate { DiagnosticErrorResult current = Field<DiagnosticErrorResult>(view, "historyAnalysis"); return current != null && current.Tolerance == 1; }, "Editing tolerance refreshes both exceedance and score");
+            Check(Field<DiagnosticErrorResult>(view, "historyAnalysis").Score.Value < score && Field<Label>(view, "errorExceededValue").Text.Contains("100%"), "Tighter tolerance lowers the score and exposes exceeded time; score=" + Field<DiagnosticErrorResult>(view, "historyAnalysis").Score + "; previous=" + score + "; text=" + Field<Label>(view, "errorExceededValue").Text);
+            Field<NumericUpDown>(view, "analysisTolerance").Value = 0;
+            Until(delegate { DiagnosticErrorResult current = Field<DiagnosticErrorResult>(view, "historyAnalysis"); return current != null && !current.Tolerance.HasValue; }, "Zero tolerance explicitly removes scoring");
+            Check(Field<Label>(view, "errorScoreValue").Text == "未设置容差" && Field<Label>(view, "errorRmsValue").Text != "—", "Missing tolerance leaves metrics visible without inventing a score");
+            Field<NumericUpDown>(view, "analysisTolerance").Value = 10;
+            Field<ComboBox>(view, "reviewMotor").SelectedItem = 2; WaitForAnalysis(view);
+            Check(Field<DiagnosticErrorResult>(view, "historyAnalysis").Mean == 4, "Switching motor changes the analysis instead of mixing axes");
+            Field<ComboBox>(view, "reviewMotor").SelectedItem = 3; WaitForAnalysis(view);
+            Check(!Field<DiagnosticErrorResult>(view, "historyAnalysis").HasData && Field<Label>(view, "errorScoreValue").Text == "无法评分", "Open-loop-only data cannot produce a perfect score");
+            Field<ComboBox>(view, "reviewMotor").SelectedItem = 1;
+            Field<NumericUpDown>(view, "reviewStart").Value = 0.9M; Field<NumericUpDown>(view, "reviewEnd").Value = 0.2M; Pump(400);
+            Check(Field<DiagnosticErrorResult>(view, "historyAnalysis") == null && Field<Label>(view, "analysisCoverage").Text.Contains("无效") && !Field<Button>(view, "exportImage").Enabled, "Invalid ranges clear stale statistics and disable mismatched exports");
+            Field<NumericUpDown>(view, "reviewEnd").Value = 1;
+            Until(delegate { DiagnosticErrorResult current = Field<DiagnosticErrorResult>(view, "historyAnalysis"); return current != null && current.StartMs == 900 && current.EndMs == 1000; }, "The latest range replaces obsolete background analysis results");
+            Control positionPlot = Field<Control>(view, "positionTrend"); int curvePixels = 0;
+            using (Bitmap narrow = (Bitmap)positionPlot.GetType().GetMethod("RenderImage").Invoke(positionPlot, new object[] { 1000, 260 }))
+            {
+                for (int x = 110; x < 970; x++) for (int y = 80; y < 220; y++)
+                { Color color = narrow.GetPixel(x, y); if (color.ToArgb() == Color.SteelBlue.ToArgb() || color.ToArgb() == Color.DarkOrange.ToArgb()) curvePixels++; }
+            }
+            Check(curvePixels > 100, "A narrow window between CSV timestamps draws clipped curves consistent with interpolated statistics");
+            form.ClientSize = new Size(900, 680); Pump(40); Snapshot(form, Path.Combine(directory, "diagnostics-analysis-compact.png"));
+            view.ReturnToLive();
+            Check(!Field<GroupBox>(view, "analysisPanel").Visible && Field<DiagnosticErrorResult>(view, "historyAnalysis") == null, "Returning live hides CSV-only analysis and clears results");
+            form.Close();
+            }
+            catch (Exception error) { Console.Error.WriteLine("Diagnostics analysis verification failed: " + error); throw; }
+        }
+    }
     private static void Interface(string directory)
     {
         Directory.CreateDirectory(directory);
@@ -440,6 +661,7 @@ internal static class MotorDebugTests
         {
             form.Show(); ConnectionView connection = Field<ConnectionView>(form, "connection"); MotionView motion = Field<MotionView>(form, "motion");
             ControllerSession session = Field<ControllerSession>(form, "session"); PathView path = Field<PathView>(form, "pathView"); DiagnosticsView diagnostics = Field<DiagnosticsView>(form, "diagnostics"); AxisStatusView states = Field<AxisStatusView>(form, "axisStates");
+            Field<DiagnosticRecorder>(diagnostics, "recorder").OutputDirectory = Path.Combine(directory, "interface-recordings");
             connection.ConnectButton.PerformClick(); Until(delegate { return motion.MoveButton.Enabled; }, "UI connects with fresh guarded feedback");
             path.Pages.SelectedIndex = 1; motion.SelectedMotor.SelectedItem = 3; Until(delegate { return states.DisableButton.Enabled; }, "Third motor has live state and controls");
             states.DisableButton.PerformClick(); Until(delegate { return Field<FeedbackService>(form, "feedbackService").Fresh && !Field<FeedbackService>(form, "feedbackService").Latest.Find(3).Status.Enabled && !Field<OperationState>(form, "operations").ManualExecuting; }, "UI selected motor disable is verified");
@@ -499,6 +721,7 @@ internal static class MotorDebugTests
             Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
             Guarding(); ManualMotion(); XYZero(); FocusedFeedback(); Recovery(); WorkflowRecovery(); PulseRepair(); TimeoutAndAlarms(); ControllerProtocol();
             string directory = Path.Combine(Path.GetTempPath(), "pmac-motor-tests-" + Guid.NewGuid().ToString("N")); ConfigurationAndLogs(directory);
+            RecordingFiles(args.Length == 0 ? directory : args[0]); DiagnosticsTrends(args.Length == 0 ? directory : args[0]); DiagnosticAnalysisInterface(args.Length == 0 ? directory : args[0]);
             Interface(args.Length == 0 ? directory : args[0]);
             Console.WriteLine("PASS: " + checks + " motor debugging assertions; simulation only, no hardware accessed."); return 0;
         }

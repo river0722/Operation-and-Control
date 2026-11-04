@@ -40,6 +40,9 @@ namespace Operations_Control.Communication
         private double followSegmentStart;
         private MotionPoint followLast;
         private MotionPoint followLastVelocity;
+        private readonly System.Collections.Generic.List<MotionPoint> splineControls = new System.Collections.Generic.List<MotionPoint>();
+        private bool followSpline;
+        private double splineTimeMs = 60;
         public bool PlanRunning { get { Update(); return plan != null; } }
         public bool IsConnected { get; private set; }
         public string DeviceName { get { return "模拟控制器 · 8 轴"; } }
@@ -60,7 +63,7 @@ namespace Operations_Control.Communication
         {
             Update();
             plan = null;
-            followActive = followEnding = false; followCurrent = null; followQueue.Clear();
+            followActive = followEnding = followSpline = false; followCurrent = null; followQueue.Clear(); splineControls.Clear();
             foreach (Axis axis in axes) { axis.Direction = 0; axis.Target = null; axis.HomeSearching = false; }
             IsConnected = false;
         }
@@ -81,12 +84,19 @@ namespace Operations_Control.Communication
             if (followActive)
             {
                 if (followCurrent == null && followQueue.Count > 0) { followCurrent = followQueue.Dequeue(); followSegmentStart = now; }
-                if (followCurrent != null)
+                while (followCurrent != null)
                 {
-                    MotionPoint point = followCurrent.At((now - followSegmentStart) / followCurrent.DurationMs);
-                    axes[followX - 1].Position = point.X * followMapping.XCountsPerUnit;
-                    axes[followY - 1].Position = point.Y * followMapping.YCountsPerUnit;
-                    if (now - followSegmentStart >= followCurrent.DurationMs) followCurrent = null;
+                    double elapsedSegment = now - followSegmentStart;
+                    if (elapsedSegment < followCurrent.DurationMs)
+                    {
+                        MotionPoint point = followCurrent.At(elapsedSegment / followCurrent.DurationMs);
+                        axes[followX - 1].Position = point.X * followMapping.XCountsPerUnit;
+                        axes[followY - 1].Position = point.Y * followMapping.YCountsPerUnit;
+                        break;
+                    }
+                    axes[followX - 1].Position = followCurrent.End.X * followMapping.XCountsPerUnit;
+                    axes[followY - 1].Position = followCurrent.End.Y * followMapping.YCountsPerUnit;
+                    followSegmentStart += followCurrent.DurationMs; followCurrent = followQueue.Count > 0 ? followQueue.Dequeue() : null;
                 }
                 if (followEnding && followCurrent == null && followQueue.Count == 0) followActive = false;
             }
@@ -260,7 +270,7 @@ namespace Operations_Control.Communication
             Update();
             if (!IsConnected || xMotor == yMotor || mapping == null) throw new InvalidOperationException("模拟随动参数无效。");
             StopPlan(); followX = xMotor; followY = yMotor; followMapping = mapping;
-            followQueue.Clear(); followCurrent = null; followEnding = false; followActive = true;
+            followQueue.Clear(); followCurrent = null; followEnding = false; followActive = true; followSpline = false; splineControls.Clear();
             followLast = mapping.FromCounts(axes[xMotor - 1].Position, axes[yMotor - 1].Position);
             followLastVelocity = new MotionPoint(0, 0);
         }
@@ -288,6 +298,8 @@ namespace Operations_Control.Communication
         public void BeginSplineFollow(int coordinateSystem, int xMotor, int yMotor, CanvasSettings mapping)
         {
             BeginPvtFollow(coordinateSystem, xMotor, yMotor, mapping);
+            followSpline = true;
+            splineControls.Add(followLast); splineControls.Add(followLast); splineControls.Add(followLast);
         }
 
         public void AppendSplineFollow(double segmentTimeMs, IList<MotionPoint> points)
@@ -295,24 +307,34 @@ namespace Operations_Control.Communication
             Update();
             if (!followActive || points == null || points.Count < 1 || segmentTimeMs < 10 || segmentTimeMs > 4000)
                 throw new InvalidOperationException("模拟 Spline1 随动段无效。");
-            MotionPoint previous = followLast;
+            splineTimeMs = segmentTimeMs;
             for (int i = 0; i < points.Count; i++)
             {
                 MotionPoint point = points[i];
                 if (!followMapping.Contains(point)) throw new InvalidOperationException("模拟 Spline1 随动点超出范围。");
-                if (i == 0 && PathGeometry.Distance(previous, point) < 0.000001) continue;
-                MotionPoint velocity = new MotionPoint((point.X - previous.X) * 1000 / segmentTimeMs, (point.Y - previous.Y) * 1000 / segmentTimeMs);
-                followQueue.Enqueue(new MotionSegment { Start = previous, End = point, StartVelocity = velocity, EndVelocity = velocity, DurationMs = segmentTimeMs });
-                previous = point;
+                splineControls.Add(point);
+                if (splineControls.Count >= 4)
+                {
+                    MotionSegment segment = TrajectoryMath.SplineSegment(splineControls[0], splineControls[1], splineControls[2], splineControls[3], segmentTimeMs);
+                    followQueue.Enqueue(segment); splineControls.RemoveAt(0);
+                }
             }
-            followLast = previous;
+            followLast = points[points.Count - 1];
         }
 
-        public void EndSplineFollow() { EndPvtFollow(); }
+        public void EndSplineFollow()
+        {
+            if (followSpline)
+            {
+                splineControls.Add(followLast); splineControls.Add(followLast);
+                while (splineControls.Count >= 4) { followQueue.Enqueue(TrajectoryMath.SplineSegment(splineControls[0], splineControls[1], splineControls[2], splineControls[3], splineTimeMs)); splineControls.RemoveAt(0); }
+            }
+            EndPvtFollow();
+        }
 
         public void AbortSplineFollow(int coordinateSystem, int xMotor, int yMotor)
         {
-            AbortPvtFollow(coordinateSystem, xMotor, yMotor);
+            AbortPvtFollow(coordinateSystem, xMotor, yMotor); splineControls.Clear(); followSpline = false;
         }
     }
 }

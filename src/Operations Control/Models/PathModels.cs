@@ -22,6 +22,8 @@ namespace Operations_Control.Models
     {
         public InterpolationMode Mode = InterpolationMode.PVT;
         public double Speed = 5, Acceleration = 20, Spacing = 0.5;
+        public double MaximumXSpeed = 1000, MaximumYSpeed = 1000;
+        public double MaximumXAcceleration = 100000, MaximumYAcceleration = 100000;
         public bool ContinuousPvt = true;
         public int MinimumSegmentMs = 50, CoordinateSystem = 1, ProgramNumber = 20;
         public int XMotor = 1, YMotor = 2;
@@ -34,6 +36,8 @@ namespace Operations_Control.Models
             if (MinimumSegmentMs < 10 || MinimumSegmentMs > 4000 || CoordinateSystem < 1 || CoordinateSystem > 16 ||
                 ProgramNumber < 1 || ProgramNumber > 32767 || XMotor < 1 || XMotor > 8 || YMotor < 1 || YMotor > 8 || XMotor == YMotor || Mapping == null)
                 throw new ArgumentException("轴、坐标系统、程序号或分段时间无效。");
+            foreach (double limit in new double[] { MaximumXSpeed, MaximumYSpeed, MaximumXAcceleration, MaximumYAcceleration })
+                if (!Finite(limit) || limit <= 0) throw new ArgumentException("每轴速度和加速度上限必须为正有限数。");
         }
         public static bool Finite(double value) { return !Double.IsNaN(value) && !Double.IsInfinity(value); }
     }

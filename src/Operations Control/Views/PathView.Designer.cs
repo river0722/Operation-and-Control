@@ -92,7 +92,7 @@ namespace Operations_Control.Views
             endX = Number(-1000000, 1000000, 5, 3); endY = Number(-1000000, 1000000, 5, 3); startAngle = Number(-360, 360, 0, 1); sweepAngle = Number(-360, 360, 90, 1);
             scale = Number(0.0001M, 10000, 1, 4); offsetX = Number(-1000000, 1000000, 0, 3); offsetY = Number(-1000000, 1000000, 0, 3); unitlessScale = Number(0.001M, 1000000, 1, 3);
             speed = Number(0.001M, 1000, 5, 3); acceleration = Number(0.001M, 100000, 20, 3); spacing = Number(0.001M, 100, 0.5M, 3);
-            autoAcceleration = new Label { Text = "规划自动计算", AutoSize = false, Width = 108, Height = 28, TextAlign = System.Drawing.ContentAlignment.MiddleLeft, Margin = new Padding(3) };
+            autoAcceleration = new Label { Text = "不设限", AutoSize = false, Width = 108, Height = 28, TextAlign = System.Drawing.ContentAlignment.MiddleLeft, Margin = new Padding(3) };
             coordinate = Number(1, 16, 1, 0); programNumber = Number(1, 32767, 20, 0); lag = Number(0, 2000, 80, 0); plcNumber = Number(-1, 31, -1, 0); homeTimeout = Number(1, 600, 60, 0);
             hardwareConfirmed = new CheckBox { Text = "实机配置已确认", AutoSize = true, Margin = new Padding(6, 6, 3, 3) };
             continuousPvt = new CheckBox { Text = "连续 PVT", AutoSize = true, Checked = true, Margin = new Padding(6, 6, 3, 3) };

@@ -289,7 +289,7 @@ namespace Operations_Control
         private static DeviceConfiguration NewConfiguration(bool simulation)
         {
             DeviceConfiguration config = new DeviceConfiguration();
-            for (int axis = 1; axis <= 8; axis++) config.Axes.Add(new AxisConfiguration { Motor = axis, TravelConfigured = simulation, MaximumSpeed = simulation ? 15 : 1, ResetCommand = simulation ? "SIMRESET{motor}" : String.Empty });
+            for (int axis = 1; axis <= 8; axis++) config.Axes.Add(new AxisConfiguration { Motor = axis, TravelConfigured = simulation, MaximumSpeed = simulation ? 15 : 1, MaximumAcceleration = simulation ? 12 : 0.01M, ResetCommand = simulation ? "SIMRESET{motor}" : String.Empty });
             return config;
         }
         private void TryMotion(Action action)
@@ -437,6 +437,7 @@ namespace Operations_Control
                 Report("鼠标随动只能从启用时锁定的当前下位机位置开始。请取消后重新定位并启用随动。", true); return;
             }
             follower.BeginAuto(motion.XAxis, motion.YAxis, configuration.Axis(motion.XAxis).MaximumSpeed, configuration.Axis(motion.YAxis).MaximumSpeed,
+                configuration.Axis(motion.XAxis).MaximumAcceleration, configuration.Axis(motion.YAxis).MaximumAcceleration,
                 canvases.Settings, pathView.CoordinateSystem, CanvasFollower.DefaultDelayMs,
                 new MotionPoint(followAnchor.X, followAnchor.Y), pathView.FollowInterpolation);
             Report((connection.IsSimulation ? "模拟" : "实机") + " " + pathView.FollowInterpolation + " 自动按鼠标画速随动（" + CanvasFollower.DefaultDelayMs + " ms 缓冲），松开鼠标停止。", false);
@@ -483,12 +484,14 @@ namespace Operations_Control
             axisStates.XYZeroButton.Enabled = connected && feedbackService.Fresh && !operations.FeedbackStale && !manualBusy && !pathBusy && !follower.Active && !shuttingDown && motion.XAxis != motion.YAxis &&
                 motionGuard.Reason(zeroX, zeroX == null ? 0 : Math.Sign(-zeroX.Position), 0, motion.Speed.Value, true) == null &&
                 motionGuard.Reason(zeroY, zeroY == null ? 0 : Math.Sign(-zeroY.Position), 0, motion.Speed.Value, true) == null;
+            diagnostics.Simulation = connection.IsSimulation;
             diagnostics.Display(feedbackService.Latest, feedbackService.Fresh && connected, motion.Motor, manualBusy || follower.Active || pathBusy || shuttingDown);
             globalStop.Enabled = connected && !shuttingDown;
             globalRecover.Enabled = connected && manual.CanRecover;
             if (pathView != null)
             {
                 pathView.UpdateContext(connection.IsSimulation, canvases.Settings, canvases.MappingReady, motion.XAxis, motion.YAxis, motion.Motor);
+                pathView.ApplyMotionLimits(configuration);
                 pathView.RefreshState();
             }
         }

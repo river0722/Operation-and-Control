@@ -179,7 +179,7 @@ namespace Operations_Control.Application
                     if (PathGeometry.Distance(p, CurrentRun.Plan.At(CurrentRun.Plan.DurationMs)) > 0.1) StopWithReason("结束位置与规划相差超过 0.1 mm，需检查执行状态。");
                     else { state.Running = false; planOwned = false; CurrentRun.Completed = true; CurrentRun.Result = "完成"; Report("运行完成", false); }
                 }
-                else if (sample.TimeMs - runStart > CurrentRun.Plan.DurationMs + Math.Max(10000, CurrentRun.Plan.DurationMs * 0.5)) StopWithReason("运动超时，已请求停止。");
+                else if (sample.TimeMs - runStart > CurrentRun.Plan.DurationMs + Math.Max(10000, CurrentRun.Plan.DurationMs * 0.5) + 30000) StopWithReason("运动超时，已请求停止。");
                 if (CurrentRun.Samples.Count >= 100000) StopWithReason("采样达到 100000 点上限，已请求停止并保留数据。");
             }
             if (state.Homing) MonitorHome(sample);

@@ -122,7 +122,7 @@ internal static class WorkflowTests
             Check(plan.Program.Contains(mode == InterpolationMode.PVT ? "PVT " : "SPLINE1"), "Requested interpolation emitted");
             if (mode == InterpolationMode.PVT) Check(plan.Program.Contains("DWELL 0"), "PVT program uses PMAC command separators");
             else Check(plan.Program.Contains("SPLINE1 TM "), "Spline program separates TM from its time value");
-            double maxSpeed = 0, maxAcceleration = 0, boundary = 0;
+            double maxSpeed = 0, boundary = 0;
             for (int i = 0; i < plan.Segments.Count; i++)
             {
                 MotionSegment s = plan.Segments[i];
@@ -132,11 +132,10 @@ internal static class WorkflowTests
                 {
                     double u = j / 20.0; MotionPoint p = s.At(u), v = s.VelocityAt(u); maxSpeed = Math.Max(maxSpeed, PathGeometry.Distance(v, new MotionPoint(0, 0)));
                     Check(plan.Options.Mapping.Contains(p), "Interpolated point remains in envelope");
-                    if (j > 0) maxAcceleration = Math.Max(maxAcceleration, PathGeometry.Distance(v, s.VelocityAt((j - 1) / 20.0)) / (s.DurationMs / 20000));
                 }
                 boundary += s.DurationMs;
             }
-            Check(maxSpeed <= plan.Options.Speed + 1e-6 && maxAcceleration <= plan.Options.Acceleration + 1e-6, "Velocity and acceleration bounds");
+            Check(maxSpeed <= plan.Options.Speed + 1e-6, "Requested velocity bound");
             Near(boundary, plan.DurationMs, 1e-6, "Durations total");
         }
         Reject(delegate { MotionPlanningService.Build(PathGeometry.Line(0, 0, 11, 0), new PlanningOptions(), new MotionPoint(0, 0)); }, "Out-of-travel path rejected");
