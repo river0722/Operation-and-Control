@@ -16,7 +16,8 @@ namespace Operations_Control.Models
         }
     }
 
-    public enum InterpolationMode { PVT, Spline }
+    public enum InterpolationMode { PVT, Spline, Linear, Circular }
+    public enum MotionSegmentMode { Cubic, Linear, Circular }
 
     public sealed class PlanningOptions
     {
@@ -25,11 +26,17 @@ namespace Operations_Control.Models
         public double MaximumXSpeed = 1000, MaximumYSpeed = 1000;
         public double MaximumXAcceleration = 100000, MaximumYAcceleration = 100000;
         public bool ContinuousPvt = true;
+        public double LinearizationTolerance = 0.01;
+        public int LinearizationPeriodMs = 20;
         public int MinimumSegmentMs = 50, CoordinateSystem = 1, ProgramNumber = 20;
         public int XMotor = 1, YMotor = 2;
         public CanvasSettings Mapping = CanvasSettings.Default;
         public void Validate()
         {
+            if (!Enum.IsDefined(typeof(InterpolationMode), Mode)) throw new ArgumentException("插补模式无效。");
+            if (!Finite(LinearizationTolerance) || LinearizationTolerance < 0.000001 || LinearizationTolerance > 1 ||
+                LinearizationPeriodMs < 10 || LinearizationPeriodMs > 1000 || LinearizationPeriodMs % 5 != 0)
+                throw new ArgumentException("直线离散误差应为 0.000001～1 mm，周期应为 10～1000 ms 且为 5 ms 的整数倍。");
             if (!Finite(Speed) || !Finite(Acceleration) || !Finite(Spacing) || Speed <= 0 || Speed > 1000 ||
                 Acceleration <= 0 || Acceleration > 100000 || Spacing < 0.001 || Spacing > 100)
                 throw new ArgumentException("速度、加速度或采样间距超出范围。");
@@ -45,11 +52,23 @@ namespace Operations_Control.Models
     public sealed class MotionSegment
     {
         public MotionPoint Start, End, StartVelocity, EndVelocity; // mm, mm/s
+        public MotionSegmentMode Mode;
+        public MotionPoint Center;
+        public double SweepRadians;
         public double StartMs, DurationMs;
         public bool Transfer;
         public MotionPoint At(double fraction)
         {
             double u = Math.Max(0, Math.Min(1, fraction)), u2 = u * u, u3 = u2 * u, seconds = DurationMs / 1000;
+            if (u == 0) return Start;
+            if (u == 1) return End;
+            if (Mode == MotionSegmentMode.Linear)
+                return new MotionPoint(Start.X + (End.X - Start.X) * u, Start.Y + (End.Y - Start.Y) * u);
+            if (Mode == MotionSegmentMode.Circular)
+            {
+                double angle = SweepRadians * u, x = Start.X - Center.X, y = Start.Y - Center.Y;
+                return new MotionPoint(Center.X + x * Math.Cos(angle) - y * Math.Sin(angle), Center.Y + x * Math.Sin(angle) + y * Math.Cos(angle));
+            }
             double a = 2 * u3 - 3 * u2 + 1, b = u3 - 2 * u2 + u, c = -2 * u3 + 3 * u2, d = u3 - u2;
             return new MotionPoint(a * Start.X + b * seconds * StartVelocity.X + c * End.X + d * seconds * EndVelocity.X,
                 a * Start.Y + b * seconds * StartVelocity.Y + c * End.Y + d * seconds * EndVelocity.Y);
@@ -57,6 +76,12 @@ namespace Operations_Control.Models
         public MotionPoint VelocityAt(double u)
         {
             double t = DurationMs / 1000;
+            if (Mode == MotionSegmentMode.Linear) return new MotionPoint((End.X - Start.X) / t, (End.Y - Start.Y) / t);
+            if (Mode == MotionSegmentMode.Circular)
+            {
+                MotionPoint p = At(u);
+                return new MotionPoint(-(p.Y - Center.Y) * SweepRadians / t, (p.X - Center.X) * SweepRadians / t);
+            }
             return new MotionPoint(((6 * u * u - 6 * u) * Start.X + (-6 * u * u + 6 * u) * End.X) / t + (3 * u * u - 4 * u + 1) * StartVelocity.X + (3 * u * u - 2 * u) * EndVelocity.X,
                 ((6 * u * u - 6 * u) * Start.Y + (-6 * u * u + 6 * u) * End.Y) / t + (3 * u * u - 4 * u + 1) * StartVelocity.Y + (3 * u * u - 2 * u) * EndVelocity.Y);
         }
@@ -66,6 +91,7 @@ namespace Operations_Control.Models
     {
         public readonly List<MotionPoint> Points = new List<MotionPoint>();
         public readonly List<MotionSegment> Segments = new List<MotionSegment>();
+        public readonly List<MotionSegment> CurveSegments = new List<MotionSegment>();
         public bool Transfer, StopAfter;
         public double SplineTimeMs;
     }

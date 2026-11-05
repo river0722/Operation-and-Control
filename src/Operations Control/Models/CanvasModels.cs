@@ -44,4 +44,44 @@ namespace Operations_Control.Models
         public MotionPoint Point { get; private set; }
         public DrawPointEventArgs(MotionPoint point) { Point = point; }
     }
+
+    // Timing for the most recent mouse-follow target. The clock values are
+    // monotonic milliseconds from the host process; they are suitable for
+    // differences, but are not wall-clock timestamps.
+    public sealed class FollowTiming
+    {
+        public double? MouseAtMs { get; internal set; }
+        public double? HostSentAtMs { get; internal set; }
+        public double? ControllerAcceptedAtMs { get; internal set; }
+        public double? ArrivedAtMs { get; internal set; }
+        public MotionPoint Target { get; internal set; }
+        public bool HasTarget { get; internal set; }
+
+        public double? MouseToHostMs { get { return Difference(MouseAtMs, HostSentAtMs); } }
+        public double? HostToControllerMs { get { return Difference(HostSentAtMs, ControllerAcceptedAtMs); } }
+        public double? ControllerToArrivalMs { get { return Difference(ControllerAcceptedAtMs, ArrivedAtMs); } }
+        public double? TotalMs { get { return Difference(MouseAtMs, ArrivedAtMs); } }
+
+        internal void Reset()
+        {
+            MouseAtMs = HostSentAtMs = ControllerAcceptedAtMs = ArrivedAtMs = null;
+            Target = new MotionPoint(0, 0); HasTarget = false;
+        }
+
+        internal void SetInput(MotionPoint target, double atMs)
+        {
+            MouseAtMs = atMs; HostSentAtMs = ControllerAcceptedAtMs = ArrivedAtMs = null;
+            Target = target; HasTarget = true;
+        }
+
+        internal FollowTiming Copy()
+        {
+            return new FollowTiming { MouseAtMs = MouseAtMs, HostSentAtMs = HostSentAtMs,
+                ControllerAcceptedAtMs = ControllerAcceptedAtMs, ArrivedAtMs = ArrivedAtMs,
+                Target = Target, HasTarget = HasTarget };
+        }
+
+        private static double? Difference(double? start, double? end)
+        { return start.HasValue && end.HasValue && end.Value >= start.Value ? (double?)(end.Value - start.Value) : null; }
+    }
 }

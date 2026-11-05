@@ -72,7 +72,7 @@ internal static class WorkflowTests
         Reject(delegate { PathGeometry.Resample(PathGeometry.Line(0, 0, 1e100, 0).Strokes[0], 0.001); }, "Huge resampling length rejected before integer overflow");
         DrawingPath example = DxfReader.Read(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\..\..\..\examples\course-shapes.dxf"), 0.01, 1);
         Check(example.Strokes.Count == 5, "Delivered DXF imports all five entities");
-        foreach (InterpolationMode mode in new InterpolationMode[] { InterpolationMode.PVT, InterpolationMode.Spline })
+        foreach (InterpolationMode mode in (InterpolationMode[])Enum.GetValues(typeof(InterpolationMode)))
             Check(MotionPlanningService.Build(example, new PlanningOptions { Mode = mode }, new MotionPoint(0, 0)).DurationMs > 0, "Delivered DXF plans in " + mode);
     }
     private static MotionPlan MakePlan(InterpolationMode mode)
@@ -88,8 +88,9 @@ internal static class WorkflowTests
         MotionPlan gentleSetting = MotionPlanningService.Build(corner, new PlanningOptions { Speed = 5, Acceleration = 0.001, Spacing = 0.25 }, new MotionPoint(0, 0));
         MotionPlan aggressiveSetting = MotionPlanningService.Build(corner, new PlanningOptions { Speed = 5, Acceleration = 99999, Spacing = 0.25 }, new MotionPoint(0, 0));
         MotionSegment cornerBefore = gentleSetting.Blocks[0].Segments[3];
-        Check(PathGeometry.Distance(cornerBefore.EndVelocity, new MotionPoint(0, 0)) > 1, "PVT corner keeps a nonzero blended speed");
-        Near(gentleSetting.Options.Acceleration, aggressiveSetting.Options.Acceleration, 1e-9, "Path acceleration is calculated independently of the former user setting");
+        Check(PathGeometry.Distance(cornerBefore.EndVelocity, new MotionPoint(0, 0)) > 0, "PVT corner keeps a nonzero blended speed");
+        Check(gentleSetting.DurationMs > aggressiveSetting.DurationMs && gentleSetting.Options.Acceleration == 0.001,
+            "Controller PVT preview honors the requested acceleration ceiling");
 
         DrawingPath joined = new DrawingPath();
         joined.Strokes.Add(PathGeometry.Line(0, 0, 1, 0).Strokes[0]);
@@ -148,6 +149,70 @@ internal static class WorkflowTests
             MotionPlan cs = MotionPlanningService.Build(PathGeometry.Line(0, 0, 1, 0), new PlanningOptions { CoordinateSystem = systems[i] }, new MotionPoint(0, 0));
             Check(cs.Program.Contains("I" + variables[i] + "=1000"), "Turbo coordinate-system feed units " + systems[i]);
         }
+    }
+    private static void NativeInterpolation()
+    {
+        foreach (InterpolationMode mode in new InterpolationMode[] { InterpolationMode.Linear, InterpolationMode.Circular })
+        {
+            MotionPlan line = MotionPlanningService.Build(PathGeometry.Line(-2, -1, 2, 1),
+                new PlanningOptions { Mode = mode, MaximumXSpeed = 0.5, MaximumYSpeed = 0.25, Spacing = 100 }, new MotionPoint(0, 0));
+            Check(line.Blocks.Count == 2 && line.Blocks[0].Transfer, "Native mode includes a straight transfer");
+            Check(line.Program.Contains("LINEAR") && !line.Program.Contains("PVT ") && !line.Program.Contains("SPLINE1"), "Native line uses controller LINEAR commands");
+            Check(line.Program.Contains("I5113=5") && line.Program.Contains("TA0 TS0"), "Native timing explicitly enables segmentation for zero acceleration time");
+            foreach (MotionSegment s in line.Segments)
+            {
+                Check(s.Mode == MotionSegmentMode.Linear, "Straight inputs remain linear in both native modes");
+                Near(PathGeometry.SegmentDistance(s.At(0.37), s.Start, s.End), 0, 1e-10, "Linear reference stays on its segment");
+                Check(s.DurationMs <= 4000 && s.DurationMs % 5 == 0, "Native TM stays bounded and matches segmentation period");
+                MotionPoint v = s.VelocityAt(0.37);
+                Check(Math.Abs(v.X) <= 0.5 + 1e-8 && Math.Abs(v.Y) <= 0.25 + 1e-8, "Native line respects distinct axis speed limits");
+            }
+        }
+        foreach (double sweep in new double[] { 90, -90, 270, -270, 360, -360 })
+        {
+            DrawingPath path = PathGeometry.Arc(1, -1, 2, 170, sweep, 0.001);
+            MotionPlan plan = MotionPlanningService.Build(path, new PlanningOptions { Mode = InterpolationMode.Circular,
+                Spacing = 100, MaximumXSpeed = 0.5, MaximumYSpeed = 0.25 }, path.Strokes[0][0]);
+            Check(plan.Program.Contains(sweep > 0 ? "CIRCLE2" : "CIRCLE1"), "Native circular direction " + sweep);
+            Check(plan.Program.Contains("INC(R)") && plan.Program.Contains("NORMAL K-1"), "Circle resets plane and incremental center-vector mode");
+            double actualSweep = 0;
+            for (int i = 0; i < plan.Segments.Count; i++)
+            {
+                MotionSegment s = plan.Segments[i]; actualSweep += s.SweepRadians;
+                Check(s.Mode == MotionSegmentMode.Circular && s.SweepRadians * sweep > 0, "Arc retains its ordered direction");
+                Check(Math.Abs(s.SweepRadians) <= Math.PI / 2 + 1e-8 && s.DurationMs <= 4000, "Full circles and long arcs split into bounded moves");
+                if (i > 0) Near(PathGeometry.Distance(plan.Segments[i - 1].End, s.Start), 0, 1e-9, "Arc split position continuity");
+                for (int j = 0; j <= 20; j++)
+                {
+                    double u = j / 20.0;
+                    Near(PathGeometry.Distance(s.At(u), new MotionPoint(1, -1)), 2, 1e-7, "Circular reference retains radius inside each segment");
+                    MotionPoint v = s.VelocityAt(u);
+                    Check(Math.Abs(v.X) <= 0.5 + 1e-8 && Math.Abs(v.Y) <= 0.25 + 1e-8, "Circular reference respects both axis speeds");
+                }
+            }
+            Near(actualSweep, sweep * Math.PI / 180, 1e-7, "Arc sweep is preserved across angle wrap");
+            Near(PathGeometry.Distance(plan.At(plan.DurationMs), path.Strokes[0][path.PointCount - 1]), 0, 1e-9, "Native circle reaches original endpoint");
+        }
+        DrawingPath mixed = PathGeometry.Line(-2, 0, 1, 0);
+        mixed.Strokes[0].AddRange(PathGeometry.Arc(0, 0, 1, 0, 90, 0.001).Strokes[0]);
+        MotionPlan mixedPlan = MotionPlanningService.Build(mixed, new PlanningOptions { Mode = InterpolationMode.Circular }, new MotionPoint(-2, 0));
+        Check(mixedPlan.Program.Contains("LINEAR") && mixedPlan.Program.Contains("CIRCLE2"), "Mixed polyline retains straight and circular sections");
+        MotionPlan polygon = MotionPlanningService.Build(PathGeometry.Star(0, 0, 3), new PlanningOptions { Mode = InterpolationMode.Circular }, new MotionPoint(0, 0));
+        Check(!polygon.Program.Contains("CIRCLE1") && !polygon.Program.Contains("CIRCLE2"), "Polygon vertices are not replaced with arcs");
+        DrawingPath square = new DrawingPath(); square.Strokes.Add(new List<MotionPoint> { new MotionPoint(1, 1), new MotionPoint(-1, 1), new MotionPoint(-1, -1), new MotionPoint(1, -1), new MotionPoint(1, 1) });
+        Check(!MotionPlanningService.Build(square, new PlanningOptions { Mode = InterpolationMode.Circular }, new MotionPoint(1, 1)).Program.Contains("CIRCLE"), "Cocircular square corners stay straight");
+        DrawingPath peak = PathGeometry.Arc(0, 0, 1, 75, 30, 0.01);
+        Reject(delegate { MotionPlanningService.Build(peak, new PlanningOptions { Mode = InterpolationMode.Circular, Spacing = 100,
+            Mapping = new CanvasSettings(-2, 2, -2, 0.999, 100, 100, "mm") }, peak.Strokes[0][0]); }, "Arc interior extrema outside travel are rejected even when all vertices fit");
+        DrawingPath reversal = PathGeometry.Arc(0, 0, 1, 0, 90, 0.001);
+        List<MotionPoint> reverse = new List<MotionPoint>(reversal.Strokes[0]); reverse.Reverse(); reversal.Strokes[0].AddRange(reverse);
+        MotionPlan reversed = MotionPlanningService.Build(reversal, new PlanningOptions { Mode = InterpolationMode.Circular }, new MotionPoint(1, 0));
+        Check(reversed.Program.Contains("CIRCLE2") && reversed.Program.Contains("CIRCLE1"), "Arc reversal retains both travel directions");
+        int[] systems = { 1, 8, 9, 10, 16 }, variables = { 5113, 5813, 5913, 6013, 6613 };
+        for (int i = 0; i < systems.Length; i++)
+            Check(MotionPlanningService.Build(PathGeometry.Line(0, 0, 1, 1), new PlanningOptions { Mode = InterpolationMode.Linear,
+                CoordinateSystem = systems[i] }, new MotionPoint()).Program.Contains("I" + variables[i] + "=5"), "Native segmentation parameter bank " + systems[i]);
+        Reject(delegate { new PlanningOptions { Mode = (InterpolationMode)99 }.Validate(); }, "Invalid interpolation is rejected");
     }
     private static void Analysis(string output)
     {
@@ -278,6 +343,36 @@ internal static class WorkflowTests
             foreach (Form window in Application.OpenForms) if (window.TopLevel) windows++;
             Check(windows == 1, "All workflows share one top-level window");
             Check(main.Contains(form) && main.Contains(Field<ProgramEditorForm>(main, "editorWindow")) && main.Contains(Field<LogForm>(main, "logWindow")), "Path, editor and log are embedded in main window");
+            DeviceConfiguration originalPlanning = new DeviceConfiguration(); form.SavePlanningSettings(originalPlanning);
+            ComboBox interpolation = Field<ComboBox>(form, "interpolation");
+            Check(interpolation.Items.Count == 4 && interpolation.Items[2].ToString() == "直线插补" && interpolation.Items[3].ToString() == "圆弧插补", "Interpolation dropdown includes both native choices");
+            Check(Field<NumericUpDown>(form, "acceleration").Visible && !Field<Label>(form, "autoAcceleration").Visible,
+                "PVT exposes its runtime acceleration parameter");
+            foreach (InterpolationMode mode in new InterpolationMode[] { InterpolationMode.Linear, InterpolationMode.Circular })
+            {
+                interpolation.SelectedIndex = (int)mode;
+                Check(form.CurrentPlan == null && !Field<CheckBox>(form, "continuousPvt").Enabled, "Changing native mode invalidates plan and disables continuous PVT");
+                Check(!Field<NumericUpDown>(form, "acceleration").Visible && Field<Label>(form, "autoAcceleration").Visible,
+                    "Native modes retain their unrestricted acceleration label");
+                DeviceConfiguration saved = new DeviceConfiguration(); form.SavePlanningSettings(saved);
+                string settingsFile = Path.Combine(output, "native-settings.xml"); DeviceConfigurationStore.Save(settingsFile, saved);
+                form.ApplySavedPlanningSettings(DeviceConfigurationStore.Load(settingsFile));
+                Check(interpolation.SelectedIndex == (int)mode, "Native interpolation survives profile save and reload");
+                form.LoadDrawing(PathGeometry.Arc(0, 0, 0.5, 0, 360, 0.001)); form.GeneratePlan();
+                Until(delegate { return form.CurrentPlan != null; }, 5000, "GUI generates native " + mode);
+                Check(form.CurrentPlan.Options.Mode == mode, "GUI uses selected native mode");
+                form.StartExecution(); Until(delegate { return form.CurrentRun != null && form.CurrentRun.Completed; }, 10000, "GUI completes native simulation " + mode);
+                Near(form.LatestSnapshot.XCounts, 50, 0.1, "Native simulation final X counts");
+                Near(form.LatestSnapshot.YCounts, 0, 0.1, "Native simulation final Y counts");
+                string exported = RunDataExporter.Export(form.CurrentRun, output);
+                Check(File.ReadAllText(Path.Combine(exported, "planned.csv")).Contains("segment_mode,center_x_mm,center_y_mm,sweep_radians"), "Native export retains geometry metadata");
+                main.Size = main.MinimumSize; Pump(50);
+                FlowLayoutPanel planning = Field<FlowLayoutPanel>(form, "planning");
+                foreach (Control control in planning.Controls)
+                    if (control.Visible) Check(planning.ClientRectangle.Contains(control.Bounds), "Native planning controls fit minimum window: " + control.Text + " " + control.Bounds + " in " + planning.ClientRectangle);
+                SaveImage(main, output, "workflow-native-" + mode + ".png"); main.Size = new Size(1176, 830);
+            }
+            form.ApplySavedPlanningSettings(originalPlanning);
             {
                 form.LoadDrawing(PathGeometry.Line(0, 0, 1, 1));
                 form.GeneratePlan(); Until(delegate { return form.CurrentPlan != null; }, 5000, "Main view plans path");
@@ -298,6 +393,9 @@ internal static class WorkflowTests
                 FlowLayoutPanel geometry = Field<FlowLayoutPanel>(form, "geometry");
                 foreach (Control control in geometry.Controls)
                     if (control.Visible) Check(geometry.ClientRectangle.Contains(control.Bounds), "Arc fields and mouse-follow control fit minimum window");
+                FlowLayoutPanel pvtPlanning = Field<FlowLayoutPanel>(form, "planning");
+                foreach (Control control in pvtPlanning.Controls)
+                    if (control.Visible) Check(pvtPlanning.ClientRectangle.Contains(control.Bounds), "PVT planning controls fit minimum window");
                 Console.WriteLine("Workflow: restore window size");
                 main.Size = new Size(1176, 830); Pump(100);
                 Console.WriteLine("Workflow: select device page");
@@ -357,7 +455,7 @@ internal static class WorkflowTests
         {
             Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
             string output = args.Length > 0 ? args[0] : Path.GetTempPath(); Directory.CreateDirectory(output);
-            Geometry(); Planning(); Analysis(output); HardwareHoming(); Simulator(); Interface(output);
+            Geometry(); Planning(); NativeInterpolation(); Analysis(output); HardwareHoming(); Simulator(); Interface(output);
             Console.WriteLine("PASS: " + checks + " workflow assertions; simulation only, no hardware accessed."); return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }

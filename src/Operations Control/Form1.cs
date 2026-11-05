@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
+using System.Globalization;
 using System.Text;
 using System.Windows.Forms;
 using Operations_Control.Controls;
@@ -28,6 +29,7 @@ namespace Operations_Control
         private OperationState operations;
         private ManualMotionService manual;
         private FeedbackService feedbackService;
+        private NxLinkBridge nxLink;
         private bool busy { get { return operations.ManualBusy; } }
         private bool shuttingDown { get { return operations.ShuttingDown; } }
         private int? joggingMotor { get { return operations.JoggingMotor; } set { operations.JoggingMotor = value; } }
@@ -61,6 +63,13 @@ namespace Operations_Control
             alarms = new AlarmService();
             follower = new CanvasFollower(session);
             editorWindow = new ProgramEditorForm(); logWindow = new LogForm(); log = logWindow.Log;
+            nxLink = new NxLinkBridge();
+            nxLink.Message += delegate(string text)
+            {
+                if (!IsHandleCreated || IsDisposed || Disposing) return;
+                try { BeginInvoke((Action)delegate { if (!IsDisposed && !Disposing) log.Append("NX", text); }); }
+                catch (InvalidOperationException) { }
+            };
             editorWindow.Icon = Icon; logWindow.Icon = Icon;
             components.Add(editorWindow); components.Add(logWindow);
             canvases.ConfigureMode(connection.IsSimulation);
@@ -85,7 +94,11 @@ namespace Operations_Control
                 if (disconnectPending && !operations.ManualExecuting && !busy) { bool close = closePending; disconnectPending = closePending = false; FinishDisconnect(close); }
                 else if (disconnectPending && operations.ManualStopFailed) { disconnectPending = closePending = false; Report("无法确认停稳，连接已保留；请检查设备或重试停止。", true); }
             };
-            feedbackService.Updated += delegate { RefreshData(null, EventArgs.Empty); };
+            feedbackService.Updated += delegate
+            {
+                if (connected && !connection.IsSimulation && feedbackService.Fresh) nxLink.Publish(feedbackService.Latest);
+                RefreshData(null, EventArgs.Empty);
+            };
             feedbackService.Failed += delegate(Exception error)
             {
                 if (IsDisposed || shuttingDown) return;
@@ -159,6 +172,7 @@ namespace Operations_Control
                     if (opened) { if (!simulation) { LoadSavedConfiguration(false); canvases.AxisMappingChanged(); } pathView.ResumePolling(); }
                     feedbackService.Clear(); samplesReady = false; currentSamples = null; canvases.BreakTrace();
                     Report(opened ? "已连接 " + session.DeviceName : "已取消设备选择。", false);
+                    if (opened && !simulation) nxLink.Start();
                     UpdateState(); if (connected) RefreshData(null, EventArgs.Empty);
                 });
             };
@@ -276,7 +290,7 @@ namespace Operations_Control
             {
                 if (e.KeyCode == Keys.Escape) { StopMonitoredAxes(); e.SuppressKeyPress = true; }
             };
-            FormClosed += delegate { refreshTimer.Stop(); drawTimer.Stop(); feedbackService.Dispose(); session.Dispose(); };
+            FormClosed += delegate { refreshTimer.Stop(); drawTimer.Stop(); nxLink.Dispose(); feedbackService.Dispose(); session.Dispose(); };
             if (!connection.IsSimulation) LoadSavedConfiguration(false);
         }
 
@@ -436,11 +450,12 @@ namespace Operations_Control
                 canvases.Follow.Checked = false;
                 Report("鼠标随动只能从启用时锁定的当前下位机位置开始。请取消后重新定位并启用随动。", true); return;
             }
-            follower.BeginAuto(motion.XAxis, motion.YAxis, configuration.Axis(motion.XAxis).MaximumSpeed, configuration.Axis(motion.YAxis).MaximumSpeed,
+            follower.BeginPath(motion.XAxis, motion.YAxis, configuration.Axis(motion.XAxis).MaximumSpeed, configuration.Axis(motion.YAxis).MaximumSpeed,
                 configuration.Axis(motion.XAxis).MaximumAcceleration, configuration.Axis(motion.YAxis).MaximumAcceleration,
                 canvases.Settings, pathView.CoordinateSystem, CanvasFollower.DefaultDelayMs,
                 new MotionPoint(followAnchor.X, followAnchor.Y), pathView.FollowInterpolation);
-            Report((connection.IsSimulation ? "模拟" : "实机") + " " + pathView.FollowInterpolation + " 自动按鼠标画速随动（" + CanvasFollower.DefaultDelayMs + " ms 缓冲），松开鼠标停止。", false);
+            pathView.ShowFollowTiming(follower.Timing, true);
+            Report((connection.IsSimulation ? "模拟" : "实机") + " 轨迹随动：按顺序复刻绘图路径，运动时间由几何规划决定，不计算鼠标速度，松开停止。", false);
             UpdateState();
         }
 
@@ -453,11 +468,11 @@ namespace Operations_Control
         {
             if (shuttingDown) return;
             follower.Pump();
+            if (pathView != null) pathView.ShowFollowTiming(follower.Timing, follower.Active);
             if (follower.Active)
             {
-                feedback.Text = (pathView.FollowInterpolation == InterpolationMode.Spline ? "Spline1" : "PVT") + " 自动随动 · 画速 " + follower.MouseSpeedMmPerSecond.ToString("0.#") +
-                    " mm/s · 参考 " + follower.FollowSpeedMmPerSecond.ToString("0.#") + " mm/s" + (follower.SpeedLimited ? "（轴上限限速）" : "") + " · " +
-                    (follower.WaitingForBuffer ? "缓冲等待，轨迹保留并自动继续" : "边画边走") + " · 待发送 " + follower.PendingPointCount + " 点 · 松开停止";
+                feedback.Text = pathView.FollowInterpolation + " 轨迹随动 · 几何规划 " + follower.FollowSpeedMmPerSecond.ToString("0.#") +
+                    " mm/s · 待发送 " + follower.PendingPointCount + " 点 · " + (follower.WaitingForBuffer ? "缓冲等待，轨迹保留" : "按顺序复刻路径") + " · 松开停止";
                 feedback.ForeColor = follower.WaitingForBuffer ? UiTheme.Warning : UiTheme.Primary;
             }
         }
@@ -567,6 +582,9 @@ namespace Operations_Control
             canvases.DisplayCurrent(samples[0].Position, samples[1].Position);
             if (!pathView.IsExecuting) canvases.Display(samples[0].Position, samples[1].Position);
             DisplayPosition(samples[0].Position, samples[1].Position);
+            MotionPoint feedbackPoint = canvases.Settings.FromCounts(samples[0].Position, samples[1].Position);
+            if (follower.RecordFeedback(feedbackPoint, feedbackService.Latest.TimeMs))
+                log.Append("随动延时", DescribeFollowTiming(follower.Timing));
             if (follower.Active && !canvases.Settings.Contains(canvases.Settings.FromCounts(samples[0].Position, samples[1].Position)))
             {
                 CancelDrawing(); canvases.Follow.Checked = false; Report("反馈位置超出已设置范围，跟随已停止。", true);
@@ -575,6 +593,17 @@ namespace Operations_Control
             { CancelDrawing(); Report("轴故障、限位或失能，鼠标跟随已停止。", true); }
             UpdateState();
         }
+
+        private static string DescribeFollowTiming(FollowTiming timing)
+        {
+            return "鼠标输入→上位机发送 " + Milliseconds(timing.MouseToHostMs) +
+                "；上位机发送→下位机接受 " + Milliseconds(timing.HostToControllerMs) +
+                "；下位机接受→反馈到位 " + Milliseconds(timing.ControllerToArrivalMs) +
+                "；总延时 " + Milliseconds(timing.TotalMs);
+        }
+
+        private static string Milliseconds(double? value)
+        { return value.HasValue ? value.Value.ToString("0.0", CultureInfo.InvariantCulture) + " ms" : "未确认"; }
 
         private void Disconnect(bool closeWindow)
         {
@@ -595,6 +624,7 @@ namespace Operations_Control
             {
                 if (IsDisposed) return;
                 connected = false; ResetSamples();
+                nxLink.Stop();
                 if (stopError != null) Report("断开前停止失败：" + stopError.Message, true);
                 if (error != null) Report("设备关闭异常：" + error.Message, true);
                 else Report("设备连接已关闭。", false);

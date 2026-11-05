@@ -61,6 +61,8 @@
     <Compile Include="Application\ManualMotionService.cs" />
     <Compile Include="Application\PulseOutputRepair.cs" />
     <Compile Include="Application\FeedbackService.cs" />
+    <Compile Include="Application\NxLinkBridge.cs" />
+    <Compile Include="Application\NxLinkPython.cs" />
     <Compile Include="Application\MotionWorkflow.cs" />
     <Compile Include="Application\MotionPlanningService.cs" />
     <Compile Include="Communication\IControllerSession.cs" />
@@ -88,6 +90,7 @@
     <Compile Include="Motion\PathGeometry.cs" />
     <Compile Include="Files\DxfReader.cs" />
     <Compile Include="Motion\TrajectoryPlanner.cs" />
+    <Compile Include="Motion\LinearTrajectorySampler.cs" />
     <Compile Include="Motion\PointToPointProfile.cs" />
     <Compile Include="Communication\PmacProgramWriter.cs" />
     <Compile Include="Motion\TrajectoryAnalysis.cs" />
@@ -162,4 +165,11 @@
     <EmbeddedResource Include="Views\LogForm.resx"><DependentUpon>LogForm.cs</DependentUpon></EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <ItemGroup>
+    <Content Include="NxLink\*.py"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+    <Content Include="NxLink\config.json"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+    <Content Include="NxLink\requirements.txt"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+    <Content Include="NxLink\setup.bat"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+    <Content Include="NxLink\setup.ps1"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+  </ItemGroup>
 </Project>

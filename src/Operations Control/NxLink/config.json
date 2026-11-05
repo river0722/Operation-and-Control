@@ -1,0 +1,88 @@
+{
+  "pmac": {
+    "prog_id": "PcommServer.PmacDevice.1",
+    "device_number": 0,
+    "auto_select_device": false,
+    "batch_commands": false,
+    "comment": "针对 Turbo PMAC2-Eth-Lite(Clipper) + 以太网。device_number 为 PEWin 里注册的 PMAC 设备号(0~7)，先用 probe.py 确认；auto_select_device=true 会弹出 PEWin 设备选择对话框；batch_commands=true 可把多次读取合并成一次通讯(通讯量减半)，程序首帧会自动校验，不可用则自动退回逐条读取。【实测 2026-11-03】batch_commands 必须保持 false：本机固件 1.947 用 \\r 拼多条命令时只返回一个逗号，读不到数值；单条读取 1.6ms/条，20ms 周期完全够用。【实测】控制器掉电后位置计数不保留，上电后各电机 #nP 都回落到 0 附近(±1 count)，因此每次开机都要重新对齐 NX 零点(靠 offset 或统一从同一物理起点开机)"
+  },
+
+  "signals": [
+    {
+      "name": "X_Pos",
+      "command": "#1P",
+      "scale": 0.0006103515625,
+      "offset": 0.0,
+      "unit": "mm",
+      "comment": "X 轴 = 电机1【已实测确认】Coordinate Systems 轴定义 #1->1638.4X。scale = 1/1638.4 = 0.0006103515625 mm/count（16384 counts/转 ÷ 10mm 丝杆导程）。实测验证：#1J^1638 → #1P 由 0.46875 变为 1637.46875，变化 1637 counts = 0.99915mm，与指令 1mm 偏差 0.85um / 0.085%，scale 正确。offset 用于对齐 NX 模型零点：真实机回零位若与 NX 装配零点不一致，填 (NX零点mm - 真实机读数mm)"
+    },
+    {
+      "name": "Y_Pos",
+      "command": "#2P",
+      "scale": 0.0006103515625,
+      "offset": 0.0,
+      "unit": "mm",
+      "comment": "Y 轴 = 电机2【已实测确认】Coordinate Systems 轴定义 #2->1638.4Y，与 X 同规格 → scale 同为 1/1638.4。方向反了把 scale 取负（不要取绝对值）"
+    },
+
+    {
+      "name": "X_speed",
+      "source": "derived",
+      "from": "X_Pos",
+      "unit": "mm/s",
+      "unit_scale": 36.0,
+      "window": 3,
+      "lowpass_hz": 12.0,
+      "deadband": 0.1,
+      "max_speed": 500.0,
+      "comment": "【速度通道】由 X_Pos 差分算出，不向 PMAC 发命令。source=derived 时 from 指定来源信号。window=3 表示用 3 帧(60ms)跨度求平均速度：单帧 20ms 差分时 1 count(0.61um)=0.03mm/s 的量化噪声会让静止时的速度来回跳，模型跟着抖。lowpass_hz 一阶低通，deadband 死区(mm/s，低于它直接输出 0 让模型停住)，max_speed 用于识别位置突跳(重连/复位/改offset)——超限时丢弃历史输出 0，避免模型被甩飞。【实测 2026-11-04】NX 新模型的速度控制挂在 x轴丝杆_x轴机架铰链(铰链副) 上，单位是 °/s，故 unit_scale=36.0（360°/10mm 导程）。该模型没有用耦合副，旋转→直线靠 x轴丝杆_x轴平台螺旋(螺旋副，螺距 10mm)。若改回 mm/s 执行器，unit_scale 改回 1.0；方向反了取负值"
+    },
+    {
+      "name": "Y_speed",
+      "source": "derived",
+      "from": "Y_Pos",
+      "unit": "mm/s",
+      "unit_scale": 36.0,
+      "window": 3,
+      "lowpass_hz": 12.0,
+      "deadband": 0.1,
+      "max_speed": 500.0,
+      "comment": "同 X_speed【实测 2026-11-04】单位 °/s → unit_scale=36.0。要用 PMAC 自己的速度读数(#2V)而不是差分，把 source 删掉、改成 \"command\": \"#2V\" 并补 \"scale\": 0.6103515625（counts/ms → mm/s，需先实测确认固件单位）"
+    }
+  ],
+
+  "loop": {
+    "period_ms": 20,
+    "max_consecutive_errors": 10,
+    "reconnect_delay_s": 2.0,
+    "stats_interval_s": 1.0,
+    "comment": "以太网实测 GetResponse(3条命令) 约 1.6ms(官方 Benchmark)，50Hz 有充足余量；想更平滑可试 10ms，但先看 CPU 占用"
+  },
+
+  "homing": {
+    "command": "P801=1",
+    "confirm": true,
+    "confirm_timeout_s": 8.0,
+    "min_gap_s": 5.0,
+    "comment": "【回零】在 4_real 窗口按 o 键，向 PMAC 发这条在线命令启动回零程序（本机约定 P801=1 使能回零程序）。只做一件事：发命令，不判断回零是否成功、不等它结束——回零进行中看每秒统计里 X_Pos/Y_Pos 是否在连续变化即可。confirm=true 表示要按两次 o（第一次只警告，8 秒内再按一次才真的发），防止手误把平台推去撞限位；想一按就动改成 false。min_gap_s 是两次回零之间的最小间隔，防止连按重复触发。回零后各轴 #nP 会变成新值（通常 0），NX 模型位置不会自动跟随，需要重新对齐零点"
+  },
+
+  "sink": {
+    "type": "opcua",
+    "comment": "默认 OPC UA（与 README 第五节推荐一致）：NX MCD 配 OpcUaClient 即可直接浏览节点，不用手工对齐数据布局。若要用 UDP，把 type 改成 udp 或在命令行加 --sink udp；udp 零依赖但 UdpClient 的信号名/类型/地址需在 NX 里手动对齐",
+
+    "udp": {
+      "host": "127.0.0.1",
+      "port": 55001,
+      "format": "json",
+      "comment": "format 可选 json / csv / kv；NX 侧配 UdpClient 时用 csv 或 kv 最省事"
+    },
+
+    "opcua": {
+      "endpoint": "opc.tcp://127.0.0.1:4843/pmac/",
+      "namespace": "PMAC",
+      "object": "XYPlatform",
+      "comment": "NX 侧配 OpcUaClient，URL 与此处保持一致；本机 4840 被安全策略占用，故改用 4843"
+    }
+  }
+}

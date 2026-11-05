@@ -1,0 +1,2 @@
+# Host-input mode needs only asyncua. Standalone PMAC mode also needs pywin32.
+asyncua>=2.0

@@ -39,6 +39,7 @@ namespace Operations_Control.Models
         }
         public void Validate()
         {
+            if (!Enum.IsDefined(typeof(InterpolationMode), Interpolation)) throw new ArgumentException("插补模式无效。");
             if (XMotor < 1 || XMotor > 8 || YMotor < 1 || YMotor > 8 || XMotor == YMotor) throw new ArgumentException("X/Y 轴映射无效。");
             new CanvasSettings(XMin, XMax, YMin, YMax, XScale, YScale, "mm");
             if (!PlanningOptions.Finite(Speed) || Speed <= 0 || Speed > 1000 || !PlanningOptions.Finite(Acceleration) || Acceleration <= 0 || Acceleration > 100000 ||

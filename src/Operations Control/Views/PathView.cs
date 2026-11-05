@@ -54,7 +54,33 @@ namespace Operations_Control.Views
         public TrajectoryRun CurrentRun { get { return run; } }
         public DrawingPath CurrentDrawing { get { return drawing.Copy(); } }
         public int CoordinateSystem { get { return (int)coordinate.Value; } }
+        private InterpolationMode SelectedInterpolation { get { return (InterpolationMode)Math.Max(0, interpolation.SelectedIndex); } }
         public InterpolationMode FollowInterpolation { get { return interpolation.SelectedIndex == 1 ? InterpolationMode.Spline : InterpolationMode.PVT; } }
+
+        public void ShowFollowTiming(FollowTiming timing, bool active)
+        {
+            if (followTimingLabel == null) return;
+            if (!active)
+            {
+                followTimingLabel.Text = "随动延时：未启用";
+                followTimingLabel.ForeColor = UiTheme.Muted;
+                return;
+            }
+            if (timing == null || !timing.HasTarget)
+            {
+                followTimingLabel.Text = "随动延时：等待鼠标目标";
+                followTimingLabel.ForeColor = UiTheme.Primary;
+                return;
+            }
+            followTimingLabel.Text = "随动延时  鼠标→发送 " + Milliseconds(timing.MouseToHostMs) +
+                "  发送→接受 " + Milliseconds(timing.HostToControllerMs) +
+                "  接受→到位 " + Milliseconds(timing.ControllerToArrivalMs) +
+                "  总计 " + Milliseconds(timing.TotalMs);
+            followTimingLabel.ForeColor = timing.ArrivedAtMs.HasValue ? UiTheme.Success : UiTheme.Primary;
+        }
+
+        private static string Milliseconds(double? value)
+        { return value.HasValue ? value.Value.ToString("0.0", CultureInfo.InvariantCulture) + " ms" : "—"; }
 
         public PathView() { InitializeComponent(); }
         public PathView(IControllerSession controller, bool simulated, CanvasSettings settings, bool mappingReady, int x, int y, CanvasView canvases)
@@ -73,6 +99,8 @@ namespace Operations_Control.Views
             drawingCanvas.Settings = actualCanvas.Settings = mapping;
             ToolTip followSpeedHint = new ToolTip(components);
             followSpeedHint.SetToolTip(speed, "此速度用于生成完整路径规划。鼠标随动根据画速自动计算，并受每轴配置速度上限约束。");
+            followSpeedHint.SetToolTip(acceleration, "PVT 路径加速度上限，同时受 X/Y 每轴最大加速度约束。");
+            followSpeedHint.SetToolTip(interpolation, "直线插补按线段运行；圆弧插补识别同圆采样点，其余部分按直线运行。这两种模式下，鼠标随动使用 PVT。");
             hardwareConfirmed.Enabled = !simulation; lag.Enabled = simulation;
             drawing = drawingCanvas.GetPath();
             geometry.Controls.Add(canvases.Follow); canvases.Follow.Text = "鼠标跟随";
@@ -91,7 +119,7 @@ namespace Operations_Control.Views
             enableButton.Click += delegate { EnableAxes(true); };
             disableButton.Click += delegate { EnableAxes(false); };
             homeButton.Click += delegate { StartHoming(); };
-            foreach (NumericUpDown input in new NumericUpDown[] { speed, spacing, coordinate, programNumber, unitlessScale, lag }) input.ValueChanged += delegate { InvalidatePlan(); if (PlanningSettingsChanged != null) PlanningSettingsChanged(this, EventArgs.Empty); };
+            foreach (NumericUpDown input in new NumericUpDown[] { speed, acceleration, spacing, coordinate, programNumber, unitlessScale, lag }) input.ValueChanged += delegate { InvalidatePlan(); if (PlanningSettingsChanged != null) PlanningSettingsChanged(this, EventArgs.Empty); };
             interpolation.SelectedIndexChanged += delegate { InvalidatePlan(); if (PlanningSettingsChanged != null) PlanningSettingsChanged(this, EventArgs.Empty); };
             continuousPvt.CheckedChanged += delegate { InvalidatePlan(); if (PlanningSettingsChanged != null) PlanningSettingsChanged(this, EventArgs.Empty); };
             hardwareConfirmed.CheckedChanged += delegate { UpdateButtons(); };
@@ -156,7 +184,7 @@ namespace Operations_Control.Views
         public void ApplySavedPlanningSettings(DeviceConfiguration saved)
         {
             if (saved == null) return;
-            interpolation.SelectedIndex = saved.Interpolation == InterpolationMode.Spline ? 1 : 0;
+            interpolation.SelectedIndex = (int)saved.Interpolation;
             speed.Value = (decimal)saved.Speed; acceleration.Value = (decimal)saved.Acceleration; spacing.Value = (decimal)saved.Spacing;
             coordinate.Value = saved.CoordinateSystem; programNumber.Value = saved.ProgramNumber;
             unitlessScale.Value = (decimal)saved.DxfScale; lag.Value = (decimal)saved.SimulatorLagMs;
@@ -165,7 +193,7 @@ namespace Operations_Control.Views
         public void SavePlanningSettings(DeviceConfiguration target)
         {
             if (target == null) return;
-            target.Interpolation = interpolation.SelectedIndex == 1 ? InterpolationMode.Spline : InterpolationMode.PVT;
+            target.Interpolation = SelectedInterpolation;
             target.Speed = (double)speed.Value; target.Acceleration = (double)acceleration.Value; target.Spacing = (double)spacing.Value;
             target.CoordinateSystem = (int)coordinate.Value; target.ProgramNumber = (int)programNumber.Value;
             target.DxfScale = (double)unitlessScale.Value; target.SimulatorLagMs = (double)lag.Value;
@@ -198,6 +226,9 @@ namespace Operations_Control.Views
             bool locked = IsBusy || externalBusy;
             importButton.Enabled = clearButton.Enabled = clearActualButton.Enabled = undoButton.Enabled = shapeButton.Enabled = transformButton.Enabled = !locked;
             geometry.Enabled = planning.Enabled = advanced.Enabled = transforms.Enabled = !locked;
+            continuousPvt.Enabled = !locked && SelectedInterpolation == InterpolationMode.PVT;
+            acceleration.Visible = SelectedInterpolation == InterpolationMode.PVT;
+            autoAcceleration.Visible = SelectedInterpolation != InterpolationMode.PVT;
             hardwareConfirmed.Enabled = !locked && !simulation;
             lag.Enabled = !locked && simulation;
             drawingCanvas.DrawingEnabled = drawingCanvas.Enabled = !IsBusy && (!externalBusy || following);
@@ -260,7 +291,7 @@ namespace Operations_Control.Views
             {
                 if (session.IsConnected && !Fresh) throw new InvalidOperationException("等待新的 X/Y 反馈后再规划。");
                 if (!simulation && !hardwareMappingReady) throw new InvalidOperationException("请先在主界面填写实际比例和行程并应用坐标。");
-                PlanningOptions options = new PlanningOptions { Mode = interpolation.SelectedIndex == 0 ? InterpolationMode.PVT : InterpolationMode.Spline,
+                PlanningOptions options = new PlanningOptions { Mode = SelectedInterpolation,
                     Speed = (double)speed.Value, Acceleration = (double)acceleration.Value, Spacing = (double)spacing.Value,
                     ContinuousPvt = continuousPvt.Checked && interpolation.SelectedIndex == 0,
                     CoordinateSystem = (int)coordinate.Value, ProgramNumber = (int)programNumber.Value, XMotor = xMotor, YMotor = yMotor, Mapping = mapping };
@@ -268,12 +299,12 @@ namespace Operations_Control.Views
                 options.MaximumXAcceleration = maximumXAcceleration; options.MaximumYAcceleration = maximumYAcceleration;
                 DrawingPath copy = drawing.Copy();
                 MotionPoint initial = session.IsConnected ? mapping.FromCounts(lastSample.XCounts, lastSample.YCounts) : new MotionPoint(0, 0);
-                Report("正在规划完整路径…", false);
+                Report(SelectedInterpolation == InterpolationMode.PVT ? "正在生成下位机规划程序与预览…" : "正在规划完整路径…", false);
                 Background(delegate { return MotionPlanningService.Build(copy, options, initial); }, delegate(MotionPlan value)
                 {
                     plan = value; programText.Text = value.Program;
                     autoAcceleration.Text = "不设限";
-                    Report(value.Options.Mode + " · " + value.Segments.Count + " 段 · " + (value.DurationMs / 1000).ToString("0.00") + " s", false);
+                    Report((value.Options.Mode == InterpolationMode.PVT ? "PVT 下位机规划预览" : interpolation.Text) + " · " + value.Segments.Count + " 段 · " + (value.DurationMs / 1000).ToString("0.00") + " s", false);
                 });
             });
         }

@@ -54,6 +54,12 @@ if ($Test) {
     if ($LASTEXITCODE -ne 0) { throw 'Module test compilation failed.' }
     & $moduleRunner
     if ($LASTEXITCODE -ne 0) { throw 'Module tests failed.' }
+    $controllerRunner = Join-Path $output 'OperationsControl.ControllerPvtTests.exe'
+    $controllerSource = Join-Path $testRoot 'ControllerPvtTests.cs'
+    & $compiler /nologo /target:exe /platform:x86 "/out:$controllerRunner" "/reference:$application" /reference:System.Core.dll $controllerSource
+    if ($LASTEXITCODE -ne 0) { throw 'Controller PVT test compilation failed.' }
+    & $controllerRunner $ScreenshotDirectory
+    if ($LASTEXITCODE -ne 0) { throw 'Controller PVT tests failed.' }
     $motorRunner = Join-Path $output 'OperationsControl.MotorDebugTests.exe'
     $motorSource = Join-Path $testRoot 'MotorDebugTests.cs'
     & $compiler /nologo /target:exe /platform:x86 "/out:$motorRunner" "/reference:$application" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Core.dll $motorSource

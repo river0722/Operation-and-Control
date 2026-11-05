@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -98,6 +98,9 @@ internal static class ModuleTests
     {
         public readonly List<MotionPoint> Targets = new List<MotionPoint>();
         public readonly List<double> Durations = new List<double>();
+        public readonly List<MotionSegment> Curves = new List<MotionSegment>();
+        private UniformSplineStream splineMath;
+        private MotionPoint curvePosition, curveVelocity;
         private readonly Queue<double> due = new Queue<double>();
         public double Time, BusyUntil, EndTime;
         public int Begins, Aborts, Retries, MaxDepth;
@@ -111,13 +114,19 @@ internal static class ModuleTests
             EndTime = Math.Max(Time, EndTime) + duration; due.Enqueue(EndTime);
             MaxDepth = Math.Max(MaxDepth, due.Count); Targets.Add(target); Durations.Add(duration);
         }
-        public void BeginPvtFollow(int cs, int x, int y, CanvasSettings mapping) { Begins++; }
-        public void AppendPvtFollow(double duration, MotionPoint end, MotionPoint velocity) { Append(duration, end); }
+        public void BeginPvtFollow(int cs, int x, int y, CanvasSettings mapping)
+        { Begins++; curvePosition = curveVelocity = new MotionPoint(0, 0); }
+        public void AppendPvtFollow(double duration, MotionPoint end, MotionPoint velocity)
+        {
+            Append(duration, end);
+            Curves.Add(new MotionSegment { Start = curvePosition, End = end, StartVelocity = curveVelocity, EndVelocity = velocity, DurationMs = duration });
+            curvePosition = end; curveVelocity = velocity;
+        }
         public void EndPvtFollow() { }
         public void AbortPvtFollow(int cs, int x, int y) { Aborts++; due.Clear(); }
-        public void BeginSplineFollow(int cs, int x, int y, CanvasSettings mapping) { Begins++; }
+        public void BeginSplineFollow(int cs, int x, int y, CanvasSettings mapping) { Begins++; splineMath = new UniformSplineStream(new MotionPoint(0, 0), 20); }
         public void AppendSplineFollow(double duration, IList<MotionPoint> points)
-        { foreach (MotionPoint point in points) Append(duration, point); }
+        { foreach (MotionPoint point in points) { Append(duration, point); Curves.Add(splineMath.Append(point)); } }
         public void EndSplineFollow() { }
         public void AbortSplineFollow(int cs, int x, int y) { Aborts++; due.Clear(); }
     }
@@ -143,7 +152,7 @@ internal static class ModuleTests
             for (int t = 8020; t <= 14000 && follower.PendingPointCount > 0; t += 20)
             { session.Time = t; follower.Pump(); session.Flush(); }
             Check(follower.Active && follower.Error == null && follower.PendingPointCount == 0, mode + " sustained dense drawing drains without a backlog stop");
-            Check(session.Targets.Count < 300 && session.Targets.Count > 50, mode + " resamples dense input rather than transmitting every mouse event");
+            Check(session.Targets.Count < 700 && session.Targets.Count > 50, mode + " resamples dense input rather than transmitting every mouse event");
             Check(session.Aborts == 0 && session.Begins == 1 && session.MaxDepth <= 3,
                 mode + " never restarts or overfills the streaming consumer");
             Check(PathGeometry.Distance(session.Targets[session.Targets.Count - 1], original[original.Count - 1]) < 1e-9,
@@ -163,7 +172,7 @@ internal static class ModuleTests
             }
             Check(maximumError <= 0.02001, mode + " simplification keeps the input polyline within the 0.02 mm contour budget");
             if (mode == InterpolationMode.Spline)
-                Check(session.Durations.TrueForAll(delegate(double d) { return d == 60; }), "Spline1 keeps a fixed TM with no overlapping control-point replay");
+                Check(session.Durations.TrueForAll(delegate(double d) { return d == 20; }), "Spline1 keeps fixed TM20 while adding explicit vertex stopping controls");
             int delivered = session.Targets.Count;
             follower.SubmitMm(new MotionPoint(1, 1)); follower.Cancel(); session.Flush();
             session.Time += 1000; follower.Pump(); session.Flush();
@@ -193,52 +202,62 @@ internal static class ModuleTests
         Check(!trace.Active && trace.Error.Contains("15 秒"), "An input queue that is actually stale for 15 seconds still stops");
     }
 
-    private static void AutomaticFollowSpeed()
+    private static double DistanceToPath(MotionPoint point, MotionPoint[] path)
+    {
+        double nearest = Double.PositiveInfinity;
+        MotionPoint start = new MotionPoint(0, 0);
+        foreach (MotionPoint end in path)
+        {
+            double dx = end.X - start.X, dy = end.Y - start.Y, length2 = dx * dx + dy * dy;
+            double u = length2 < 1e-12 ? 0 : Math.Max(0, Math.Min(1, ((point.X - start.X) * dx + (point.Y - start.Y) * dy) / length2));
+            nearest = Math.Min(nearest, PathGeometry.Distance(point, new MotionPoint(start.X + u * dx, start.Y + u * dy)));
+            start = end;
+        }
+        return nearest;
+    }
+
+    private static void GeometryFollowPlanning()
     {
         CanvasSettings mapping = new CanvasSettings(-20, 20, -20, 20, 200, 800, "mm");
+        MotionPoint[] shape = { new MotionPoint(1, 0), new MotionPoint(0.4, 0), new MotionPoint(1.4, 0),
+            new MotionPoint(1.4, 1), new MotionPoint(0, 1), new MotionPoint(0, 0) };
         foreach (InterpolationMode mode in new InterpolationMode[] { InterpolationMode.PVT, InterpolationMode.Spline })
         {
-            FollowSession session = new FollowSession { Capacity = 20 };
-            CanvasFollower follower = new CanvasFollower(session, delegate { return session.Time; });
-            follower.BeginAuto(1, 2, 15, 15, 25, 30, mapping, 1, 100, new MotionPoint(0, 0), mode);
-            session.Time = 1000; follower.SubmitMm(new MotionPoint(3, 4)); // 5 mm / 1 s
-            session.Time = 1500; follower.SubmitMm(new MotionPoint(6, 8)); // 5 mm / 0.5 s
-            double slowTime = 0, fastTime = 0; bool first = true;
-            int observed = 0;
-            for (int t = 1600; t <= 5000 && follower.PendingPointCount > 0; t += 20)
+            FollowSession baseline = null;
+            foreach (double inputInterval in new double[] { 0, 1, 137 })
             {
-                session.Time = t; follower.Pump(); session.Flush();
-                while (observed < session.Targets.Count)
+                FollowSession session = new FollowSession { Capacity = 3 };
+                CanvasFollower follower = new CanvasFollower(session, delegate { return session.Time; });
+                follower.BeginPath(1, 2, 15, 15, 25, 30, mapping, 1, 100, new MotionPoint(0, 0), mode);
+                foreach (MotionPoint point in shape) { session.Time += inputInterval; follower.SubmitMm(point); }
+                Check(follower.PendingPointCount == shape.Length, mode + " retains the entire ordered input, including a collinear reversal and a closed loop");
+                for (int t = 1000; t <= 14000 && follower.PendingPointCount > 0; t += 20)
+                { session.Time = t; follower.Pump(); session.Flush(); }
+                Check(follower.Active && follower.PendingPointCount == 0 && session.Begins == 1 && session.Commands.Count == 0,
+                    mode + " sends coordinated trajectory segments rather than independent jog destinations");
+                int vertex = 0;
+                foreach (MotionSegment curve in session.Curves)
                 {
-                    MotionPoint target = session.Targets[observed];
-                    if (first) slowTime += session.Durations[observed]; else fastTime += session.Durations[observed];
-                    if (PathGeometry.Distance(target, new MotionPoint(3, 4)) < 1e-8) first = false;
-                    observed++;
+                    for (int i = 0; i <= 25; i++)
+                        Check(DistanceToPath(curve.At(i / 25.0), shape) <= 0.020001, mode + " actual interpolation follows the drawn polyline without cutting a corner");
+                    if (vertex < shape.Length && PathGeometry.Distance(curve.End, shape[vertex]) < 1e-8) vertex++;
+                    double seconds = curve.DurationMs / 1000;
+                    Check(TrajectoryMath.PeakVelocity(curve.Start.X, curve.End.X, curve.StartVelocity.X, curve.EndVelocity.X, seconds) <= 75.000001 &&
+                        TrajectoryMath.PeakVelocity(curve.Start.Y, curve.End.Y, curve.StartVelocity.Y, curve.EndVelocity.Y, seconds) <= 18.750001,
+                        mode + " geometry timing respects the two different axis scales");
                 }
+                Check(vertex == shape.Length, mode + " executes every corner, reversal and loop endpoint in order");
+                if (baseline == null) baseline = session;
+                else
+                {
+                    bool identical = baseline.Targets.Count == session.Targets.Count;
+                    for (int i = 0; identical && i < session.Targets.Count; i++)
+                        identical = PathGeometry.Distance(baseline.Targets[i], session.Targets[i]) < 1e-10 && Math.Abs(baseline.Durations[i] - session.Durations[i]) < 1e-10;
+                    Check(identical, mode + " produces identical geometry and motion times for the same path regardless of mouse timestamps: " + inputInterval);
+                }
+                Check(follower.RecordFeedback(shape[shape.Length - 1], session.Time + 1), mode + " records final arrival even when all input timestamps are identical");
+                follower.Cancel(); session.Flush();
             }
-            Check(follower.Active && follower.PendingPointCount == 0 && slowTime >= 1000 - 1e-7 && slowTime <= 1060 && fastTime >= 500 - 1e-7 && fastTime <= 560,
-                mode + " derives both slow and fast move durations from mouse timestamps, with only fixed spline time quantization; slow=" + slowTime + ", fast=" + fastTime);
-            Check(Math.Abs(follower.MouseSpeedMmPerSecond - 10) < 1e-8 && !follower.SpeedLimited,
-                mode + " automatically increases reference speed when the mouse draws twice as fast");
-            follower.Cancel(); session.Flush();
-
-            session = new FollowSession { Capacity = 20 };
-            FollowSession limitedSession = session;
-            follower = new CanvasFollower(session, delegate { return limitedSession.Time; });
-            follower.BeginAuto(1, 2, 1, 0.8M, mapping, 1, 100, new MotionPoint(0, 0), mode);
-            session.Time = 100; follower.SubmitMm(new MotionPoint(2, 2));
-            session.Time = 200; follower.Pump(); session.Flush();
-            Check(follower.SpeedLimited && Math.Abs(follower.MouseSpeedMmPerSecond - Math.Sqrt(8) * 10) < 1e-7 &&
-                follower.FollowSpeedMmPerSecond <= Math.Sqrt(8) / 2 + 1e-8,
-                mode + " converts unequal axis scales and limits automatically to the slower configured Y axis");
-            for (int t = 220; t < 4000 && follower.PendingPointCount > 0; t += 20)
-            { session.Time = t; follower.Pump(); session.Flush(); }
-            double total = 0;
-            foreach (double duration in session.Durations) total += duration;
-            Check(follower.Active && follower.PendingPointCount == 0 && total >= 3000 - 1e-7 && total <= 3060 &&
-                PathGeometry.Distance(session.Targets[session.Targets.Count - 1], new MotionPoint(2, 2)) < 1e-8,
-                mode + " stretches an overspeed mouse stroke while preserving its endpoint and safe axis timing");
-            follower.Cancel(); session.Flush();
         }
     }
 
@@ -268,15 +287,17 @@ internal static class ModuleTests
             DrawingPath circle = PathGeometry.Arc(0, 0, 25, 0, 360, 0.01);
             PlanningOptions options = new PlanningOptions { Mode = mode, Speed = 5, Spacing = 1,
                 Mapping = new CanvasSettings(-30, 30, -30, 30, 1000, 1000, "mm"),
-                MaximumXSpeed = 50, MaximumYSpeed = 50, MaximumXAcceleration = 0.00001, MaximumYAcceleration = 0.00001 };
+                MaximumXSpeed = 50, MaximumYSpeed = 50, MaximumXAcceleration = 0.1, MaximumYAcceleration = 0.1 };
             MotionPlan slow = MotionPlanningService.Build(circle, options, new MotionPoint(0, 0));
             options.MaximumXAcceleration = options.MaximumYAcceleration = 100000;
             MotionPlan relaxed = MotionPlanningService.Build(circle, options, new MotionPoint(0, 0));
-            Check(slow.Program == relaxed.Program, mode + " complete circle and transfer ignore configured acceleration ceilings");
+            Check(mode == InterpolationMode.PVT ? slow.DurationMs > relaxed.DurationMs : slow.Program == relaxed.Program,
+                mode + " acceleration behavior follows its planning mode");
             options.Speed = 10;
-            options.MaximumXAcceleration = options.MaximumYAcceleration = 0.00001;
+            options.MaximumXAcceleration = options.MaximumYAcceleration = 0.1;
             MotionPlan fast = MotionPlanningService.Build(circle, options, new MotionPoint(0, 0));
-            Check(fast.DurationMs < slow.DurationMs * 0.6, mode + " circle responds to a higher target speed despite low acceleration settings");
+            Check(mode == InterpolationMode.PVT ? fast.DurationMs >= relaxed.DurationMs : fast.DurationMs < slow.DurationMs * 0.6,
+                mode + " speed changes retain the mode's acceleration constraints");
             if (mode == InterpolationMode.Spline)
                 Check(fast.Blocks[1].SplineTimeMs < 100, "Spline circle TM no longer stalls at 264.744 ms");
         }
@@ -571,9 +592,34 @@ internal static class ModuleTests
         bool invalid = false; try { DiagnosticErrorAnalysis.Analyze(ramp, 1, 1000, 0, 5); } catch (ArgumentException) { invalid = true; }
         Check(invalid, "Invalid time ranges are rejected");
     }
+
+    private static void FollowTimingMeasurement()
+    {
+        FollowSession session = new FollowSession { Capacity = 20 };
+        CanvasFollower follower = new CanvasFollower(session, delegate { return session.Time; });
+        follower.Begin(1, 2, 5, CanvasSettings.Default, 1, 100, new MotionPoint(0, 0));
+        session.Time = 10; follower.SubmitMm(new MotionPoint(1, 0));
+        session.Time = 110; follower.Pump(); session.Flush();
+        FollowTiming pending = follower.Timing;
+        Check(pending.MouseToHostMs.HasValue && Math.Abs(pending.MouseToHostMs.Value - 100) < 1e-9,
+            "Follow timing records the mouse-to-host dispatch interval");
+        Check(pending.HostToControllerMs.HasValue && pending.HostToControllerMs.Value < 1e-9,
+            "Follow timing records the controller acceptance timestamp");
+        session.Time = 170;
+        Check(follower.RecordFeedback(new MotionPoint(1, 0), session.Time),
+            "Follow timing recognizes a feedback position within the arrival tolerance");
+        FollowTiming complete = follower.Timing;
+        Check(complete.ControllerToArrivalMs.HasValue && Math.Abs(complete.ControllerToArrivalMs.Value - 60) < 1e-9 &&
+            complete.TotalMs.HasValue && Math.Abs(complete.TotalMs.Value - 160) < 1e-9,
+            "Follow timing reports controller-to-arrival and end-to-end delay");
+        Check(!follower.RecordFeedback(new MotionPoint(1, 0), 180),
+            "A completed target is logged only once");
+        follower.Cancel(); session.Flush();
+    }
+
     private static int Main()
     {
-        try { Execution(); Cancellation(); Homing(); PlcHoming(); FeedbackAndManual(); Files(); PointToPointProfile(); FollowFlowControl(); AutomaticFollowSpeed(); ConstraintMath(); DiagnosticErrors(); Console.WriteLine("PASS: " + checks + " module assertions; no UI or hardware accessed."); return 0; }
+        try { Execution(); Cancellation(); Homing(); PlcHoming(); FeedbackAndManual(); Files(); PointToPointProfile(); FollowFlowControl(); GeometryFollowPlanning(); FollowTimingMeasurement(); ConstraintMath(); DiagnosticErrors(); Console.WriteLine("PASS: " + checks + " module assertions; no UI or hardware accessed."); return 0; }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }
     }
 }

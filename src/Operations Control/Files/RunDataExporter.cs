@@ -34,7 +34,7 @@ namespace Operations_Control.Files
             }
             using (StreamWriter writer = new StreamWriter(Path.Combine(directory, "planned.csv"), false, Encoding.UTF8))
             {
-                writer.WriteLine("block,segment,transfer,stop_after,start_ms,duration_ms,start_x_mm,start_y_mm,end_x_mm,end_y_mm,start_vx_mm_s,start_vy_mm_s,end_vx_mm_s,end_vy_mm_s");
+                writer.WriteLine("block,segment,transfer,stop_after,start_ms,duration_ms,start_x_mm,start_y_mm,end_x_mm,end_y_mm,start_vx_mm_s,start_vy_mm_s,end_vx_mm_s,end_vy_mm_s,segment_mode,center_x_mm,center_y_mm,sweep_radians");
                 for (int blockIndex = 0; blockIndex < run.Plan.Blocks.Count; blockIndex++)
                 {
                     PlannedStroke block = run.Plan.Blocks[blockIndex];
@@ -42,7 +42,7 @@ namespace Operations_Control.Files
                     {
                         MotionSegment s = block.Segments[segmentIndex];
                         bool stopAfter = block.StopAfter && segmentIndex == block.Segments.Count - 1;
-                        writer.WriteLine(blockIndex + "," + segmentIndex + "," + block.Transfer + "," + stopAfter + "," + N(s.StartMs) + "," + N(s.DurationMs) + "," + N(s.Start.X) + "," + N(s.Start.Y) + "," + N(s.End.X) + "," + N(s.End.Y) + "," + N(s.StartVelocity.X) + "," + N(s.StartVelocity.Y) + "," + N(s.EndVelocity.X) + "," + N(s.EndVelocity.Y));
+                        writer.WriteLine(blockIndex + "," + segmentIndex + "," + block.Transfer + "," + stopAfter + "," + N(s.StartMs) + "," + N(s.DurationMs) + "," + N(s.Start.X) + "," + N(s.Start.Y) + "," + N(s.End.X) + "," + N(s.End.Y) + "," + N(s.StartVelocity.X) + "," + N(s.StartVelocity.Y) + "," + N(s.EndVelocity.X) + "," + N(s.EndVelocity.Y) + "," + s.Mode + "," + N(s.Center.X) + "," + N(s.Center.Y) + "," + N(s.SweepRadians));
                     }
                 }
             }

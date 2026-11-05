@@ -11,11 +11,13 @@ namespace Operations_Control.Application
     {
         public const double DefaultDelayMs = 100;
         public const double StartToleranceMm = 0.5;
-        private const double SampleMs = 60, ContourToleranceMm = 0.02, MaximumInputAgeMs = 15000;
+        private const double SampleMs = 20, ContourToleranceMm = 0.02, MaximumInputAgeMs = 15000;
+        public const double ArrivalToleranceMm = 0.05;
         private sealed class PendingPoint
         {
             public MotionPoint Point;
             public double TimeMs;
+            public int Sequence;
             public PendingPoint(MotionPoint point, double timeMs) { Point = point; TimeMs = timeMs; }
         }
         private sealed class Segment
@@ -27,13 +29,15 @@ namespace Operations_Control.Application
         private readonly IControllerSession session;
         private readonly Func<double> now;
         private readonly Queue<PendingPoint> points = new Queue<PendingPoint>();
+        private readonly FollowTiming timing = new FollowTiming();
+        private readonly object timingLock = new object();
+        private int inputSequence;
         private int generation, xMotor, yMotor, coordinateSystem, stepsRemaining, sourceSteps;
         private bool pending, configured, streaming, streamStarted, hasFallback;
         private InterpolationMode mode;
         private decimal speed;
         private decimal ySpeed;
-        private bool automaticSpeed;
-        private double delayMs, lastInputTime, executionEnd, retryAt, sourceDuration;
+        private double delayMs, executionEnd, retryAt, sourceDuration;
         private double maximumXAcceleration = 100000, maximumYAcceleration = 100000;
         private MotionPoint latestFallback, lastPoint, lastSubmitted, lastVelocity, sourceStep;
         private bool hasSubmitted;
@@ -46,9 +50,8 @@ namespace Operations_Control.Application
         public int PendingPointCount { get { return points.Count + (source == null ? 0 : 1) + (lookahead == null ? 0 : 1); } }
         public event EventHandler Failed;
         public string Error { get; private set; }
-        public double MouseSpeedMmPerSecond { get; private set; }
         public double FollowSpeedMmPerSecond { get; private set; }
-        public bool SpeedLimited { get; private set; }
+        public FollowTiming Timing { get { lock (timingLock) { return timing.Copy(); } } }
 
         public CanvasFollower(IControllerSession session) : this(session, delegate { return MonotonicClock.NowMs; }) { }
         public CanvasFollower(IControllerSession session, Func<double> now) { this.session = session; this.now = now; }
@@ -59,21 +62,22 @@ namespace Operations_Control.Application
         public void Begin(int x, int y, decimal velocity, CanvasSettings settings, int cs, double followDelayMs, MotionPoint initial)
         { Begin(x, y, velocity, settings, cs, followDelayMs, initial, InterpolationMode.PVT); }
 
-        public void BeginAuto(int x, int y, decimal maximumXCountsPerMs, decimal maximumYCountsPerMs,
+        public void BeginPath(int x, int y, decimal maximumXCountsPerMs, decimal maximumYCountsPerMs,
             CanvasSettings settings, int cs, double followDelayMs, MotionPoint initial, InterpolationMode interpolation)
-        { BeginAuto(x, y, maximumXCountsPerMs, maximumYCountsPerMs, 12M, 12M, settings, cs, followDelayMs, initial, interpolation); }
+        { BeginPath(x, y, maximumXCountsPerMs, maximumYCountsPerMs, 12M, 12M, settings, cs, followDelayMs, initial, interpolation); }
 
-        public void BeginAuto(int x, int y, decimal maximumXCountsPerMs, decimal maximumYCountsPerMs,
+        public void BeginPath(int x, int y, decimal maximumXCountsPerMs, decimal maximumYCountsPerMs,
             decimal maximumXCountsPerMsSquared, decimal maximumYCountsPerMsSquared,
             CanvasSettings settings, int cs, double followDelayMs, MotionPoint initial, InterpolationMode interpolation)
         {
+            if (!(session is IStreamingTrajectorySession)) throw new InvalidOperationException("当前会话不支持同步轨迹随动。");
             if (maximumXCountsPerMs <= 0 || maximumXCountsPerMs > AxisConfiguration.MaximumSupportedSpeedCtPerMs ||
                 maximumYCountsPerMs <= 0 || maximumYCountsPerMs > AxisConfiguration.MaximumSupportedSpeedCtPerMs)
                 throw new ArgumentOutOfRangeException("maximumXCountsPerMs");
             if (maximumXCountsPerMsSquared <= 0 || maximumYCountsPerMsSquared <= 0)
                 throw new ArgumentOutOfRangeException("maximumXCountsPerMsSquared");
             Begin(x, y, maximumXCountsPerMs, settings, cs, followDelayMs, initial, interpolation);
-            ySpeed = maximumYCountsPerMs; automaticSpeed = true;
+            ySpeed = maximumYCountsPerMs;
             maximumXAcceleration = (double)maximumXCountsPerMsSquared * 1000000 / mapping.XCountsPerUnit;
             maximumYAcceleration = (double)maximumYCountsPerMsSquared * 1000000 / mapping.YCountsPerUnit;
         }
@@ -87,11 +91,12 @@ namespace Operations_Control.Application
             Interlocked.Increment(ref generation);
             points.Clear(); source = lookahead = null; prepared = null; sourceCurve = null;
             xMotor = x; yMotor = y; speed = velocity; coordinateSystem = cs; mapping = settings; mode = interpolation;
-            ySpeed = velocity; automaticSpeed = false;
+            ySpeed = velocity;
             maximumXAcceleration = maximumYAcceleration = 100000;
             lastVelocity = new MotionPoint(0, 0);
-            MouseSpeedMmPerSecond = FollowSpeedMmPerSecond = 0; SpeedLimited = false;
-            delayMs = followDelayMs; lastPoint = initial; lastInputTime = now(); executionEnd = retryAt = 0;
+            FollowSpeedMmPerSecond = 0;
+            lock (timingLock) { timing.Reset(); inputSequence = 0; }
+            delayMs = followDelayMs; lastPoint = initial; executionEnd = retryAt = 0;
             pending = configured = streamStarted = hasFallback = hasSubmitted = WaitingForBuffer = false;
             streaming = session is IStreamingTrajectorySession;
             Error = null; Active = true;
@@ -103,7 +108,28 @@ namespace Operations_Control.Application
             if (!mapping.Contains(point)) { Fail("鼠标随动目标超出坐标范围，已停止。"); return; }
             if (hasSubmitted && PathGeometry.Distance(lastSubmitted, point) < 0.0001) return;
             if (points.Count >= 10000) { Fail("待发送轨迹过多，已停止；请缩短连续拖画时间。"); return; }
-            points.Enqueue(new PendingPoint(point, now())); lastSubmitted = point; hasSubmitted = true;
+            double inputAt = now();
+            lock (timingLock)
+            {
+                points.Enqueue(new PendingPoint(point, inputAt) { Sequence = ++inputSequence });
+                timing.SetInput(point, inputAt);
+            }
+            lastSubmitted = point; hasSubmitted = true;
+        }
+
+        // Feed the latest controller feedback into the current target timing.
+        // The arrival timestamp is the controller sample timestamp, so the
+        // displayed latency includes communication and feedback sampling.
+        public bool RecordFeedback(MotionPoint actual, double feedbackAtMs)
+        {
+            lock (timingLock)
+            {
+                if (!Active || !timing.HasTarget || !timing.ControllerAcceptedAtMs.HasValue || timing.ArrivedAtMs.HasValue) return false;
+                if (feedbackAtMs < timing.ControllerAcceptedAtMs.Value || !Finite(actual)) return false;
+                if (PathGeometry.Distance(actual, timing.Target) > ArrivalToleranceMm) return false;
+                timing.ArrivedAtMs = feedbackAtMs;
+                return true;
+            }
         }
 
         // Compatibility for older count-based callers.
@@ -133,21 +159,21 @@ namespace Operations_Control.Application
                         else
                         {
                             if (points.Count == 0 || points.Peek().TimeMs > time - delayMs) return;
-                            source = TakeNext(time - delayMs, lastPoint);
+                            source = TakeNext(lastPoint);
                         }
                         // Freeze the next chord before choosing this chord's terminal
                         // velocity. Do not later simplify away a braking constraint.
-                        if (points.Count > 0 && points.Peek().TimeMs <= time) lookahead = TakeNext(time, source.Point);
+                        if (points.Count > 0) lookahead = TakeNext(source.Point);
                     }
                     else
                     {
                         if (!hasFallback) return;
                         source = new PendingPoint(mapping.FromCounts(latestFallback.X, latestFallback.Y), time);
                     }
-                    double inputDuration = Math.Max(20, source.TimeMs - lastInputTime);
                     double distance = PathGeometry.Distance(source.Point, lastPoint);
-                    MouseSpeedMmPerSecond = distance * 1000 / inputDuration;
-                    double requestedTime = RequestedTime(inputDuration);
+                    // Mouse timestamps are only for buffering, queue health and latency.
+                    // Motion time is derived exclusively from geometry and axis parameters.
+                    double requestedTime = SampleMs;
                     if (mode == InterpolationMode.Spline)
                     {
                         double interval = SampleMs / 1000;
@@ -157,11 +183,11 @@ namespace Operations_Control.Application
                         double step = Math.Max(0.000001, Math.Min(xStep, yStep));
                         double splineDuration = Math.Max(requestedTime, 1500 * Math.Max(Math.Abs(source.Point.X - lastPoint.X) / Math.Max(0.000001, xSpeed), Math.Abs(source.Point.Y - lastPoint.Y) / Math.Max(0.000001, ySpeedMm)));
                         splineDuration = Math.Max(splineDuration, 1000 * Math.Sqrt(6 * distance / Math.Max(0.000001, Math.Min(maximumXAcceleration, maximumYAcceleration))));
-                        sourceSteps = stepsRemaining = Math.Max(1, (int)Math.Ceiling(Math.Max(distance / step, splineDuration / SampleMs)));
+                        int movingSteps = Math.Max(1, (int)Math.Ceiling(Math.Max(distance / step, splineDuration / SampleMs)));
+                        sourceSteps = stepsRemaining = movingSteps + 2;
                         sourceDuration = SampleMs; sourceCurve = null;
-                        sourceStep = new MotionPoint((source.Point.X - lastPoint.X) / sourceSteps, (source.Point.Y - lastPoint.Y) / sourceSteps);
+                        sourceStep = new MotionPoint((source.Point.X - lastPoint.X) / movingSteps, (source.Point.Y - lastPoint.Y) / movingSteps);
                         FollowSpeedMmPerSecond = distance * 1000 / (sourceSteps * sourceDuration);
-                        SpeedLimited = automaticSpeed && sourceSteps * sourceDuration > inputDuration + SampleMs;
                     }
                     else
                     {
@@ -176,7 +202,7 @@ namespace Operations_Control.Application
                         // through a direction discontinuity. Collinear input can.
                         if (nextDistance > 1e-9 && dx * nx + dy * ny > 0 && Math.Abs(dx * ny - dy * nx) <= 1e-9 * distance * nextDistance)
                         {
-                            double nextTime = SafeTime(source.Point, lookahead.Point, RequestedTime(Math.Max(20, lookahead.TimeMs - source.TimeMs)));
+                            double nextTime = SafeTime(source.Point, lookahead.Point, SampleMs);
                             double terminal = Math.Min(distance * 1000 / safeTime, nextDistance * 1000 / nextTime);
                             endVelocity = new MotionPoint(terminal * dx / distance, terminal * dy / distance);
                         }
@@ -200,7 +226,6 @@ namespace Operations_Control.Application
                     double duration = mode == InterpolationMode.Spline ? Math.Ceiling(high / SampleMs) * SampleMs : high;
                     sourceCurve.DurationMs = duration;
                     if (!WithinLimits(sourceCurve)) { Fail("无法在配置的速度和加速度内生成连续随动轨迹，已停止。"); return; }
-                    SpeedLimited = automaticSpeed && duration > inputDuration + (mode == InterpolationMode.Spline ? SampleMs : 0.001);
                     if (duration > MaximumInputAgeMs) { Fail("目标距离与随动约束不匹配，预计超过 15 秒，已停止。"); return; }
                     sourceSteps = stepsRemaining = Math.Max(1, (int)Math.Ceiling(duration / (mode == InterpolationMode.Spline ? SampleMs : 120)));
                     sourceDuration = duration / sourceSteps;
@@ -208,17 +233,22 @@ namespace Operations_Control.Application
                     }
                 }
                 double fraction = (sourceSteps - stepsRemaining + 1.0) / sourceSteps;
-                MotionPoint end = sourceCurve == null ? (stepsRemaining == 1 ? source.Point : new MotionPoint(lastPoint.X + sourceStep.X, lastPoint.Y + sourceStep.Y)) : sourceCurve.At(fraction);
+                // Three copies of a spline vertex finish at that vertex with zero
+                // velocity before the next chord, preserving corners and reversals.
+                MotionPoint end = sourceCurve == null ? (stepsRemaining <= 3 ? source.Point : new MotionPoint(lastPoint.X + sourceStep.X, lastPoint.Y + sourceStep.Y)) : sourceCurve.At(fraction);
                 prepared = new Segment { End = end, Duration = sourceDuration,
                     Velocity = sourceCurve == null ? new MotionPoint(0, 0) : sourceCurve.VelocityAt(fraction) };
             }
             int epoch = generation, x = xMotor, y = yMotor, cs = coordinateSystem;
             InterpolationMode interpolation = mode;
             CanvasSettings currentMapping = mapping; decimal velocity = speed, yVelocity = ySpeed; Segment segment = prepared;
+            bool timingSegment = source != null && stepsRemaining == 1;
+            int timingSequence = source == null ? -1 : source.Sequence;
             pending = true;
             session.Execute(delegate
             {
                 if (Thread.VolatileRead(ref generation) != epoch) return;
+                double sentAt = now();
                 if (streaming)
                 {
                     IStreamingTrajectorySession stream = (IStreamingTrajectorySession)session;
@@ -237,6 +267,8 @@ namespace Operations_Control.Application
                     if (!configured) { session.SetSpeed(x, velocity); session.SetSpeed(y, yVelocity); }
                     if (Thread.VolatileRead(ref generation) == epoch) session.MovePair(x, y, currentMapping.ToCounts(segment.End));
                 }
+                lock (timingLock)
+                    if (timingSegment && inputSequence == timingSequence) timing.HostSentAtMs = sentAt;
             }, delegate(Exception failure)
             {
                 if (generation != epoch) return;
@@ -247,15 +279,14 @@ namespace Operations_Control.Application
                     WaitingForBuffer = true; retryAt = now() + 50; return;
                 }
                 if (failure != null) { Fail(failure.Message); return; }
+                lock (timingLock)
+                    if (timingSegment && inputSequence == timingSequence) timing.ControllerAcceptedAtMs = now();
                 configured = true; hasFallback = false; lastPoint = segment.End; lastVelocity = segment.Velocity;
                 executionEnd = Math.Max(executionEnd, now()) + segment.Duration;
                 prepared = null; stepsRemaining--;
-                if (stepsRemaining == 0) { lastInputTime = source.TimeMs; source = null; }
+                if (stepsRemaining == 0) source = null;
             });
         }
-
-        private double RequestedTime(double inputDuration)
-        { return automaticSpeed ? inputDuration : Math.Max(SampleMs, Math.Min(120, inputDuration)); }
 
         private double SafeTime(MotionPoint start, MotionPoint end, double requested)
         {
@@ -276,28 +307,33 @@ namespace Operations_Control.Application
                 TrajectoryMath.PeakAcceleration(s.Start.Y, s.End.Y, s.StartVelocity.Y, s.EndVelocity.Y, t) <= maximumYAcceleration * (1 + 1e-10);
         }
 
-        private PendingPoint TakeNext(double releaseBefore, MotionPoint start)
+        private PendingPoint TakeNext(MotionPoint start)
         {
             PendingPoint next = points.Dequeue();
-            double startTime = next.TimeMs;
             List<MotionPoint> folded = new List<MotionPoint>(); folded.Add(next.Point);
-            while (points.Count > 0 && points.Peek().TimeMs <= releaseBefore && points.Peek().TimeMs - startTime < SampleMs)
+            while (points.Count > 0 && folded.Count < 256)
             {
                 MotionPoint end = points.Peek().Point;
                 bool straight = true;
+                double previousProjection = 0;
                 foreach (MotionPoint point in folded)
-                    if (!OnChord(point, start, end)) { straight = false; break; }
+                {
+                    double projection;
+                    if (!OnChord(point, start, end, out projection) || projection < previousProjection - 1e-12) { straight = false; break; }
+                    previousProjection = projection;
+                }
                 if (!straight) break;
                 next = points.Dequeue(); folded.Add(next.Point);
             }
             return next;
         }
 
-        private static bool OnChord(MotionPoint point, MotionPoint start, MotionPoint end)
+        private static bool OnChord(MotionPoint point, MotionPoint start, MotionPoint end, out double u)
         {
             double dx = end.X - start.X, dy = end.Y - start.Y, length2 = dx * dx + dy * dy;
+            u = 0;
             if (length2 < 1e-12) return PathGeometry.Distance(point, start) < 0.0001;
-            double u = ((point.X - start.X) * dx + (point.Y - start.Y) * dy) / length2;
+            u = ((point.X - start.X) * dx + (point.Y - start.Y) * dy) / length2;
             if (u < 0 || u > 1) return false; // Retain reversals and overshoots.
             return PathGeometry.Distance(point, new MotionPoint(start.X + u * dx, start.Y + u * dy)) <= ContourToleranceMm;
         }

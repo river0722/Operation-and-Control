@@ -9,6 +9,7 @@ namespace Operations_Control.Application
         public static MotionPlan Build(DrawingPath drawing, PlanningOptions options, MotionPoint initial)
         {
             MotionPlan plan = TrajectoryPlanner.Build(drawing, options, initial);
+            plan = LinearTrajectorySampler.Build(plan);
             plan.Program = PmacProgramWriter.Write(plan);
             return plan;
         }

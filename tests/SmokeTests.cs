@@ -525,6 +525,8 @@ internal static class SmokeTests
     {
         PathView followPath = Find<PathView>(form);
         NumericUpDown offlineSpeed = (NumericUpDown)typeof(PathView).GetField("speed", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(followPath);
+        ComboBox offlineInterpolation = (ComboBox)typeof(PathView).GetField("interpolation", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(followPath);
+        offlineInterpolation.SelectedIndex = 1;
         offlineSpeed.Value = 0.001M;
         motion.Speed.Value = 5; Pump(150);
         double before = Position(session, form);
@@ -550,20 +552,35 @@ internal static class SmokeTests
         DrawMouse(canvases.DrawingCanvas, "OnMouseMove", 4, 3); Pump(150);
         Check(!motion.MoveButton.Enabled && !programs.SendButton.Enabled && FindButton(form, "停止").Enabled,
             "Drawing follow must lock competing commands while preserving stop");
-        Check(!offlineSpeed.Enabled, "Offline speed remains locked during automatic following");
+        Check(!offlineSpeed.Enabled, "Offline planning settings remain locked during trajectory following");
         Until(delegate { return Math.Abs(Position(session, form) - 400) < 10 && Math.Abs(Position(session, form, 2) - 300) < 10; },
-            "Automatic following reaches mouse target independently of the tiny offline planning speed");
+            "Geometry-planned following completes the drawn path independently of offline planning speed");
         double firstFollowX = Position(session, form), firstFollowY = Position(session, form, 2);
         Check(Math.Abs(firstFollowX - 400) < 10 && Math.Abs(firstFollowY - 300) < 10,
             "Mouse mm target must move both simulated axes through their conversion scales; actual=" + firstFollowX + "," + firstFollowY +
             ", pointer=" + canvases.DrawingCanvas.PointerPoint.X + "," + canvases.DrawingCanvas.PointerPoint.Y);
         Check(canvases.ActualCanvas.PointCount > 3, "Actual trajectory must accumulate controller feedback samples");
+        using (ManualResetEvent started = new ManualResetEvent(false))
+        using (ManualResetEvent release = new ManualResetEvent(false))
+        {
+            session.Execute(delegate { started.Set(); release.WaitOne(2000); }, delegate(Exception error) { });
+            Check(started.WaitOne(2000), "Worker blocker starts for ordered-path integration check");
+            DrawMouse(canvases.DrawingCanvas, "OnMouseMove", -8, -6);
+            CanvasFollower pathFollower = (CanvasFollower)typeof(Form1).GetField("follower", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(form);
+            pathFollower.Pump();
+            DrawMouse(canvases.DrawingCanvas, "OnMouseMove", 4, 3);
+            Check(pathFollower.PendingPointCount >= 2, "Blocked UI dispatch retains the detour and return rather than replacing them with the latest target");
+            release.Set();
+            Until(delegate { return pathFollower.PendingPointCount == 0 && Math.Abs(Position(session, form) - firstFollowX) < 10 && Math.Abs(Position(session, form, 2) - firstFollowY) < 10; },
+                "Spline following finishes the queued detour and returns to its final endpoint");
+        }
         DrawMouse(canvases.DrawingCanvas, "OnMouseMove", -8, -6); Pump(110);
         DrawMouse(canvases.DrawingCanvas, "OnMouseUp", -8, -6); Pump(120);
         double stoppedX = Position(session, form), stoppedY = Position(session, form, 2); Pump(200);
         Check(Position(session, form) == stoppedX && Position(session, form, 2) == stoppedY,
             "Mouse release must stop both axes before distant target completes");
         Check(motion.MoveButton.Enabled && !canvases.DrawingCanvas.IsDrawing, "Release must restore normal controls");
+        offlineInterpolation.SelectedIndex = 0;
 
         // Re-grab the live position after the previous stroke, without rearming or aiming within 0.5 mm.
         MotionCanvas handleCanvas = canvases.DrawingCanvas;
